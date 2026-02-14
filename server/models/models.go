@@ -28,3 +28,12 @@ type User struct {
 	IsAdmin   bool `gorm:"not null;default:false"`
 	Role      string
 }
+
+type Vendor struct {
+	ID        uint   `gorm:"primaryKey"`
+	Name     string `gorm:"unique;not null"`
+	Password  string `gorm:"not null"`
+	CreatedAt time.Time
+	IsAdmin   bool `gorm:"not null;default:false"`
+	Role      string
+}
