@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"kiskis/database"
+	"kiskis/middleware"
 	"kiskis/routes"
 
 	"github.com/gin-contrib/cors"
@@ -55,50 +56,37 @@ func main() {
 	// Публичные маршруты (без аутентификации)
 	r.POST("/api/register", routes.Register)
 	r.POST("/api/login", routes.Login)
-	r.GET("/api/users/:id", routes.GetUser)
+	//r.GET("/api/users/:id", routes.GetUser)
 	r.GET("/api/users", routes.GetUsers)
 
-	// // Приватные маршруты (требуют JWT)
-	// authGroup := r.Group("/api")
-	// authGroup.Use(middleware.AuthMiddleware())
-	// {
-	// 	//создание задания
-	// 	authGroup.POST("/databases", routes.SaveDatabase)
-	// 	authGroup.GET("/getdatabases", routes.GetUserDatabases)
-	// 	authGroup.GET("/databases/:id", routes.GetDatabasesByID)
-	// 	authGroup.POST("/tasks", routes.SaveTask)
-	// 	authGroup.GET("/tasks/:id", routes.GetTasksByID)
-	// 	authGroup.DELETE("/databases/:id", routes.DelDatabasesByID)
-	// 	authGroup.DELETE("/tasks/:id", routes.DelTasksByID)
-	// 	authGroup.PATCH("/databases/:id", routes.UpdDatabasesByID)
-	// 	authGroup.PATCH("/tasks/:id", routes.UpdTasksByID)
+	// Приватные маршруты (требуют JWT)
+	authGroup := r.Group("/api")
+	authGroup.Use(middleware.AuthMiddleware())
+	{
+		//Поставщик
+		authGroup.POST("/vendors", routes.NewVendor)
+		authGroup.GET("/vendors", routes.GetVendor)
+		authGroup.DELETE("/vendors/:id", routes.DelVendorByID)
+		authGroup.PATCH("/vendors/:id", routes.UpdVendorByID)
 
-	// 	//решение задания
-	// 	authGroup.POST("/check-solution", routes.CheckSolutionWithSchema)
-	// 	authGroup.GET("/get-solution", routes.GetSolutionTaskProfile)
-	// 	authGroup.GET("/get-solution/:id", routes.GetSolutionTask)
+		//Документы
+		authGroup.POST("/documents", routes.NewDocument)
+		authGroup.GET("/documents", routes.GetDocuments)
+		authGroup.DELETE("/documents/:id", routes.DelDocumentByID)
+		authGroup.PATCH("/documents/:id", routes.UpdDocumentByID)
+		
 
-	// 	// Профиль пользователя
-	// 	authGroup.GET("/profile/me", routes.GetMyProfile)
-	// 	authGroup.GET("/users/:id/databases", routes.GetUserDatabasesProfile)
-	// 	authGroup.GET("/users/:id/task", routes.GetUserTasks)
-	// 	authGroup.GET("/users/:id/solutions", routes.GetUserSolutions)
-	// 	authGroup.GET("/tasks/:id/solutions", routes.GetTaskSolutions)
-
-	// 	// Меню
-	// 	authGroup.GET("/users/active", routes.GetUserStats)
-
-	// 	adminGroup := authGroup.Group("/admin")
-	// 	adminGroup.Use(routes.AdminMiddleware())
-	// 	{
-	//     	adminGroup.GET("/stats", routes.GetAdminStats)
-	//     	adminGroup.GET("/users", routes.GetAllUsers)
-	//     	adminGroup.PATCH("/users/:id", routes.UpdateUser)
-	//     	adminGroup.DELETE("/users/:id", routes.DeleteUser)
-	//     	adminGroup.GET("/tasks", routes.GetAllTasks)
-	//     	adminGroup.DELETE("/tasks/:id", routes.DeleteTask)
-	// 	}
-	// }
+		// adminGroup := authGroup.Group("/admin")
+		// adminGroup.Use(routes.AdminMiddleware())
+		// 	{
+		//     	adminGroup.GET("/stats", routes.GetAdminStats)
+		//     	adminGroup.GET("/users", routes.GetAllUsers)
+		//     	adminGroup.PATCH("/users/:id", routes.UpdateUser)
+		//     	adminGroup.DELETE("/users/:id", routes.DeleteUser)
+		//     	adminGroup.GET("/tasks", routes.GetAllTasks)
+		//     	adminGroup.DELETE("/tasks/:id", routes.DeleteTask)
+		// 	}
+	}
 
 	// Выведите все зарегистрированные маршруты
 	fmt.Println("Registered routes:")

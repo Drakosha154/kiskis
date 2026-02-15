@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"fmt"
 	"net/http"
 
 	"kiskis/auth"
@@ -16,6 +17,8 @@ func Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	fmt.Println(user)
 
 	// Хешируем пароль
 	if err := user.HashPassword(user.Password); err != nil {
@@ -94,7 +97,7 @@ func GetUser(c *gin.Context) {
 func GetUsers(c *gin.Context) {
 	var users []models.User
 	result := database.DB.
-		Select("id", "username", "is_admin", "created_at", "role").
+		Select("id", "login", "created_at", "role").
 		Order("created_at DESC").
 		Find(&users)
 
