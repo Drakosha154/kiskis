@@ -3,8 +3,8 @@ import { Routes, Route } from 'react-router-dom';
 
 export default function Navbar() {
   return (
-    <nav className="navbar navbar-dark bg-dark">
-      <div className="container-fluid bg-dark">
+    <nav className="navbar navbar-dark bg-black">
+      <div className="container-fluid bg-black">
         <a className="navbar-brand fw-bold" href="/">Вышивальщики</a>
 
         {/* Ссылка на админ-панель справа в виде кнопки */}
