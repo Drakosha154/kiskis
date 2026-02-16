@@ -19,9 +19,9 @@ function App() {
     <div className="App" style={{ width: '100%', height: '100%', minWidth: '100%', minHeight: '100%', position: 'absolute', overflow: 'hidden' }}>
       <Navbar />
       <Routes>
+        <Route path="/" element={<MainPages setAuth={setAuth} />} />
         <Route path="/login" element={<Login setAuth={setAuth} />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/mainpages" element={<MainPages setAuth={setAuth} />} />
       </Routes>
       
     </div>

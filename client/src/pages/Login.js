@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Form, Container, Alert } from 'react-bootstrap';
-import { animate } from 'animejs';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const Login = ({ setAuth }) => {
-  const [email, setEmail] = useState('');
+  const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -17,14 +16,14 @@ const Login = ({ setAuth }) => {
       const response = await fetch(`${API_BASE_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ login, password }),
       });
 
       const data = await response.json();
       if (response.ok) {
         localStorage.setItem('token', data.token);
         setAuth(true);
-        navigate('/profile');
+        navigate('/');
       } else {
         setError(data.error || 'Login failed');
       }
@@ -39,11 +38,11 @@ const Login = ({ setAuth }) => {
       {error && <Alert variant="danger">{error}</Alert>}
       <Form onSubmit={handleSubmit}>
         <Form.Group className="mb-3">
-          <Form.Label>Email</Form.Label>
+          <Form.Label>Login</Form.Label>
           <Form.Control
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="login"
+            value={login}
+            onChange={(e) => setLogin(e.target.value)}
             required
           />
         </Form.Group>
