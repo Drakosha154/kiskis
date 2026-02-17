@@ -48,7 +48,6 @@ function MainPage() {
             <th>5</th>
             <th>6</th>
             <th>7</th>
-            <th>8</th>
             <th>Взаимодействие</th>
           </tr>
         </thead>
@@ -62,7 +61,6 @@ function MainPage() {
                   <td>{vendor.Email}</td>
                   <td>{vendor.Address}</td>
                   <td>{vendor.Inn}</td>
-                  <td>{vendor.Payment_account}</td>
                   <td></td>
                 </tr>
               ))

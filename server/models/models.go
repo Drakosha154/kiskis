@@ -45,24 +45,23 @@ type Vendor struct {
 
 type Products struct {
 	ID          uint   `gorm:"primaryKey"`
-	article     string `gorm:"not null"`
-	name        string `gorm:"not null"`
-	description string
-	unit        string `gorm:"not null"`
-	category    string
-	min_stock   int `gorm:"default:0"`
-	created_at  time.Time
+	Article     string `gorm:"not null"`
+	Name        string `gorm:"not null"`
+	Description string
+	Unit        string `gorm:"not null"`
+	Category    string
+	Min_stock   int `gorm:"default:0"`
+	Created_at  time.Time
 }
 
 type Vendor_Products struct {
-	ID             uint `gorm:"primaryKey"`
-	supplier_id    int  `gorm:"not null"`
-	product_id     int  `gorm:"not null"`
-	supplier_price float64
-	currency       string `gorm:"default:RUB"`
-	delivery_days  int
-	is_active      bool `gorm:"default:true"`
-	updated_at     time.Time
+	ID            uint `gorm:"primaryKey"`
+	Vendor_id     int  `gorm:"not null"`
+	Product_id    int  `gorm:"not null"`
+	Vendor_price  float64
+	Currency      string `gorm:"default:RUB"`
+	Delivery_days int
+	Updated_at    time.Time
 }
 
 type Documents struct {
