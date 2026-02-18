@@ -44,7 +44,10 @@ func NewProducts(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Products registered successfully"})
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Products registered successfully",
+		"product": product, // Добавляем созданный товар в ответ
+	})
 
 }
 
@@ -193,61 +196,41 @@ func NewVendorProduct(c *gin.Context) {
 }
 
 func GetVendorProduct(c *gin.Context) {
-
-	type products models.Products
-
-	type VendorWithProducts struct {
-		Vendor_id      int        `json:"vendor_id"`
-		Vendor_name    string     `json:"vendor_name"`
-		Products       []products `json:"products"`
-		Products_count int        `json:"products_count"`
-	}
-
-	type Response struct {
-		Vendors []VendorWithProducts `json:"vendors"`
-	}
-
-	// Получаем всех поставщиков одним запросом
-	var vendors []models.Vendor
-	result := database.DB.
-		Select("*").
-		Order("created_at DESC").
-		Find(&vendors)
-
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get vendors"})
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid products ID"})
 		return
 	}
 
-	// Создаем мапу для быстрого доступа к именам поставщиков
-	vendorNames := make(map[uint]string)
-	var Vendor_ids = make([]uint, 0)
-	for _, v := range vendors {
-		vendorNames[v.ID] = v.Company_name
-		Vendor_ids = append(Vendor_ids, v.ID)
+	type VendorProductResponse struct {
+		ID              uint      `json:"id"`
+		Vendor_id       int       `json:"vendor_id"`
+		Product_id      int       `json:"product_id"`
+		Product_name    string    `json:"product_name"`
+		Product_article string    `json:"product_article"`
+		Vendor_price    float64   `json:"vendor_price"`
+		Currency        string    `json:"currency"`
+		Delivery_days   int       `json:"delivery_days"`
+		Updated_at      time.Time `json:"updated_at"`
 	}
 
-	// Базовый запрос для получения всех товаров поставщиков
-	db := database.DB.Table("vendor_products").
-		Select(`vendor_products.*, 
-		products.name as product_name, 
-		products.article as product_article, 
-		products.description as product_description, 
-		products.unit  as product_unit, 
-		products.category as product_category, 
-		products.min_stock as product_min_stock`).
-		Joins("LEFT JOIN products ON vendor_products.product_id = products.id").
-		Where("vendor_products.vendor_id IN ?", Vendor_ids)
+	var results []VendorProductResponse
 
-	// Выполняем запрос
-	rows, err := db.Rows()
-	if err != nil {
+	query := database.DB.Table("vendor_products").
+		Select(`vendor_products.*, 
+                products.name as product_name, 
+                products.article as product_article`).
+		Joins("LEFT JOIN products ON vendor_products.product_id = products.id")
+
+	query = query.Where("vendor_products.vendor_id = ?", id)
+
+	if err := query.Scan(&results).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch vendor products"})
 		return
 	}
-	defer rows.Close()
 
-	c.JSON(http.StatusOK, gin.H{"vendorProducts": rows}) ///ФИКУС
+	c.JSON(http.StatusOK, gin.H{"vendorProducts": results})
 }
 
 func DelVendorProductByID(c *gin.Context) {

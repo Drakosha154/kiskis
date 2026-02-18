@@ -20,7 +20,7 @@ func main() {
 		Host:     "localhost",
 		Port:     5432,
 		User:     "postgres",
-		Password: "antivzlom",
+		Password: "123",
 		DBName:   "kiskis",
 	}
 
@@ -82,9 +82,9 @@ func main() {
 		authGroup.PATCH("/products/:id", routes.UpdProductByID)
 
 		//Товар Поставщик
-		authGroup.POST("/supplier-products", routes.NewVendorProduct)
-		authGroup.GET("/supplier-products", routes.GetVendorProduct)
-		authGroup.DELETE("/supplier-products/:id", routes.DelVendorProductByID)
+		authGroup.POST("/vendor-products", routes.NewVendorProduct)
+		authGroup.GET("/vendor-products/:id", routes.GetVendorProduct)
+		authGroup.DELETE("/vendor-products/:id", routes.DelVendorProductByID)
 
 		// adminGroup := authGroup.Group("/admin")
 		// adminGroup.Use(routes.AdminMiddleware())
