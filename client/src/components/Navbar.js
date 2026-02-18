@@ -11,9 +11,6 @@ export default function Navbar() {
         <div className="d-flex">
           <a className="btn btn-outline-light btn-sm" href="/roflik">
             <i className="bi bi-gear-fill me-1">
-              <Routes>
-                <Route path="/roflik" element={<Roflik />} />
-              </Routes>
             </i>
             Нажми
           </a>
