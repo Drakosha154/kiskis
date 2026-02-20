@@ -51,7 +51,7 @@ function MainPage() {
       <div className='container border border-3 border-black rounded-5 text-bg-secondary' style={{ minWidth: '1200px', minHeight: '100px', position: 'relative', marginTop: '50px'}}>
         <div className="d-flex justify-content-evenly m-3 align-self-stretch">
           <button 
-            className={`btn btn-lg ${activePage === 'suppliers' ? 'btn-success' : 'btn-primary'}`} 
+            className={`btn btn-lg border border-2 border-black btn-info ${activePage === 'suppliers' ? 'btn-success' : 'btn-primary' }`} 
             type="button" 
             style={{width:'200px', height:'65px'}}
             onClick={() => setActivePage('suppliers')}
@@ -59,7 +59,7 @@ function MainPage() {
             Поставщики
           </button>
           <button 
-            className={`btn btn-lg ${activePage === 'contracts' ? 'btn-success' : 'btn-primary'}`} 
+            className={`btn btn-lg border border-2 border-black btn-info ${activePage === 'contracts' ? 'btn-success' : 'btn-primary'}`} 
             type="button" 
             style={{width:'200px', height:'65px'}}
             onClick={() => setActivePage('contracts')}
@@ -67,7 +67,7 @@ function MainPage() {
             Закл. договоров
           </button>
           <button 
-            className={`btn btn-lg ${activePage === 'warehouse' ? 'btn-success' : 'btn-primary'}`} 
+            className={`btn btn-lg border border-2 border-black btn-info ${activePage === 'warehouse' ? 'btn-success' : 'btn-primary'}`} 
             type="button" 
             style={{width:'200px', height:'65px'}}
             onClick={() => setActivePage('warehouse')}
@@ -75,7 +75,7 @@ function MainPage() {
             Склад
           </button>
           <button 
-            className={`btn btn-lg ${activePage === 'documents' ? 'btn-success' : 'btn-primary'}`} 
+            className={`btn btn-lg border border-2 border-black btn-info ${activePage === 'documents' ? 'btn-success' : 'btn-primary'}`} 
             type="button" 
             style={{width:'200px', height:'65px'}}
             onClick={() => setActivePage('documents')}
@@ -83,7 +83,7 @@ function MainPage() {
             Документы
           </button>
           <button 
-            className={`btn btn-lg ${activePage === 'reports' ? 'btn-success' : 'btn-primary'}`} 
+            className={`btn btn-lg border border-2 border-black btn-info ${activePage === 'reports' ? 'btn-success' : 'btn-primary'}`} 
             type="button" 
             style={{width:'200px', height:'65px'}}
             onClick={() => setActivePage('reports')}

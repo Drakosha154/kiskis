@@ -466,18 +466,18 @@ function VendorsPage({ setError }) {
               <td>
                 <div className="btn-group" role="group">
                   <Button 
-                    variant="danger" 
-                    size="sm"
-                    onClick={() => handleDelete(vendor.ID)}
-                  >
-                    Удалить
-                  </Button>
-                  <Button 
                     variant="warning" 
                     size="sm"
                     onClick={() => handleShowEditModal(vendor)}
                   >
                     Редактировать
+                  </Button>
+                  <Button 
+                    variant="danger" 
+                    size="sm"
+                    onClick={() => handleDelete(vendor.ID)}
+                  >
+                    Удалить
                   </Button>
                 </div>
               </td>
