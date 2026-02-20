@@ -258,3 +258,38 @@ func DelVendorProductByID(c *gin.Context) {
 		"id":      id,
 	})
 }
+
+func GetVendorProductForContract(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid products ID"})
+		return
+	}
+
+	type VendorProductResponse struct {
+		ID            uint      `json:"id"`
+		Vendor_id     int       `json:"vendor_id"`
+		Company_name  string    `json:"company_name"`
+		Product_id    int       `json:"product_id"`
+		Vendor_price  float64   `json:"vendor_price"`
+		Currency      string    `json:"currency"`
+		Delivery_days int       `json:"delivery_days"`
+		Updated_at    time.Time `json:"updated_at"`
+	}
+
+	var results []VendorProductResponse
+
+	query := database.DB.Table("vendor_products").
+		Select(`vendor_products.*, vendors.*`).
+		Joins("Left join vendors on vendor_products.vendor_id = vendors.id")
+
+	query = query.Where("vendor_products.product_id = ?", id)
+
+	if err := query.Scan(&results).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch vendor products"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"vendorProducts": results})
+}

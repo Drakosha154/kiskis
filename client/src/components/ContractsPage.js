@@ -10,6 +10,7 @@ function NewContractPage({ setError }) {
   const [contractItems, setContractItems] = useState([]);
   const [showVendorModal, setShowVendorModal] = useState(false);
   const [currentItemIndex, setCurrentItemIndex] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [contractData, setContractData] = useState({
     doc_number: 'ДОГ-' + Date.now(),
     description: '',
@@ -21,7 +22,6 @@ function NewContractPage({ setError }) {
   useEffect(() => {
     fetchProducts();
     fetchVendors();
-    fetchVendorProducts();
   }, []);
 
   const fetchProducts = async () => {
@@ -32,7 +32,6 @@ function NewContractPage({ setError }) {
       });
       if (!response.ok) throw new Error('Failed to fetch products');
       const data = await response.json();
-      console.log(data)
       setProducts(data.products || []);
     } catch (err) {
       setError('Ошибка загрузки товаров: ' + err.message);
@@ -53,24 +52,47 @@ function NewContractPage({ setError }) {
     }
   };
 
-  const fetchVendorProducts = async () => {
-    // Здесь должен быть эндпоинт для получения товаров поставщиков
-    // Пока заглушка
-    setVendorProducts([
-      { id: 1, vendor_id: 1, product_id: 1, price: 100, min_order: 10, available: 1000 },
-      { id: 2, vendor_id: 2, product_id: 1, price: 95, min_order: 20, available: 500 },
-      { id: 3, vendor_id: 3, product_id: 1, price: 110, min_order: 5, available: 200 },
-      { id: 4, vendor_id: 1, product_id: 2, price: 200, min_order: 5, available: 200 },
-      { id: 5, vendor_id: 2, product_id: 2, price: 190, min_order: 10, available: 300 },
-      { id: 6, vendor_id: 3, product_id: 2, price: 210, min_order: 15, available: 150 },
-      { id: 7, vendor_id: 1, product_id: 3, price: 500, min_order: 2, available: 50 },
-      { id: 8, vendor_id: 2, product_id: 3, price: 480, min_order: 3, available: 40 },
-    ]);
+  // Новая функция для получения поставщиков для конкретного товара
+  const fetchVendorsForProduct = async (productId) => {
+    const token = localStorage.getItem('token');
+    setLoading(true);
+    try {
+      const response = await fetch(`http://localhost:8080/api/vendor-products_for_contract/${productId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch vendor products');
+      const data = await response.json();
+      return data.vendorProducts || [];
+    } catch (err) {
+      setError('Ошибка загрузки поставщиков для товара: ' + err.message);
+      return [];
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const addProductToContract = (productId) => {
+  const addProductToContract = async (productId) => {
     const product = products.find(p => p.ID === parseInt(productId));
     if (!product) return;
+
+    // Загружаем поставщиков для этого товара
+    const vendorsForProduct = await fetchVendorsForProduct(productId);
+
+    console.log(vendorsForProduct)
+    
+    // Преобразуем данные из API в нужный формат
+    const formattedVendors = vendorsForProduct.map(vp => ({
+      id: vp.id,
+      vendor_id: vp.vendor_id,
+      product_id: vp.product_id,
+      price: vp.vendor_price,
+      currency: vp.currency,
+      delivery_days: vp.delivery_days,
+      vendor_name: vp.company_name || 'Неизвестный поставщик', // Имя из таблицы vendors
+      vendor_rating: vp.rating || 0,
+      min_order: 1, // Можно добавить поле min_order в БД если нужно
+      available: 1000 // Можно добавить поле available в БД если нужно
+    }));
 
     // Создаем временный ID для элемента в списке
     const tempId = Date.now() + Math.random();
@@ -78,14 +100,15 @@ function NewContractPage({ setError }) {
     setContractItems([
       ...contractItems,
       {
-        tempId: tempId, // Используем временный ID для идентификации в списке
+        tempId: tempId,
         product_id: product.ID,
         product_name: product.Name,
         sku: product.Article,
         unit: product.Unit,
         required_quantity: 0,
         vendors: [],
-        total_allocated: 0
+        total_allocated: 0,
+        availableVendors: formattedVendors // Сохраняем доступных поставщиков для этого товара
       }
     ]);
   };
@@ -142,13 +165,8 @@ function NewContractPage({ setError }) {
   };
 
   const getAvailableVendorsForProduct = (productId) => {
-    return vendorProducts
-      .filter(vp => vp.product_id === productId)
-      .map(vp => ({
-        ...vp,
-        vendor_name: vendors.find(v => v.id === vp.vendor_id)?.name || 'Неизвестный поставщик',
-        vendor_rating: vendors.find(v => v.id === vp.vendor_id)?.rating || 0
-      }));
+    const item = contractItems.find(item => item.product_id === productId);
+    return item?.availableVendors || [];
   };
 
   const handleSubmit = async () => {
@@ -169,7 +187,7 @@ function NewContractPage({ setError }) {
       supplier_id: 0, // 0 означает несколько поставщиков
       status: 'draft',
       total_amount: calculateGrandTotal(),
-      description: `Доставка: ${contractData.delivery_address}\nУсловия оплаты: ${getPaymentTermsText(contractData.payment_terms)}\n${contractData.description}`,
+      description: `Доставка: ${contractData.delivery_address}\nУсловия оплаты: ${getPaymentTermsText(contractData.payment_terms)}\nДата доставки: ${contractData.delivery_date}\n${contractData.description}`,
     };
 
     try {
@@ -188,6 +206,22 @@ function NewContractPage({ setError }) {
       
       // Здесь можно сохранить детали распределения по поставщикам
       // в отдельную таблицу или как JSON поле в документе
+      const distributionData = {
+        document_id: docResult.id,
+        items: contractItems.map(item => ({
+          product_id: item.product_id,
+          required_quantity: item.required_quantity,
+          vendors: item.vendors.map(v => ({
+            vendor_id: v.vendor_id,
+            quantity: v.quantity,
+            price: v.price,
+            currency: v.currency || 'RUB'
+          }))
+        }))
+      };
+
+      // TODO: Сохранить distributionData в отдельный эндпоинт
+      console.log('Distribution data:', distributionData);
       
       alert('Договор успешно создан');
       navigate('/contracts');
@@ -216,9 +250,9 @@ function NewContractPage({ setError }) {
           <Button 
             variant="success" 
             onClick={handleSubmit}
-            disabled={contractItems.length === 0}
+            disabled={contractItems.length === 0 || loading}
           >
-            Создать договор
+            {loading ? 'Загрузка...' : 'Создать договор'}
           </Button>
         </div>
       </div>
@@ -234,6 +268,7 @@ function NewContractPage({ setError }) {
                   style={{ width: '300px' }}
                   onChange={(e) => addProductToContract(e.target.value)}
                   value=""
+                  disabled={loading}
                 >
                   <option value="">+ Добавить товар</option>
                   {products.map(product => (
@@ -305,6 +340,7 @@ function NewContractPage({ setError }) {
                             size="sm"
                             onClick={() => openVendorSelection(index)}
                             className="me-2"
+                            disabled={loading}
                           >
                             Выбрать поставщиков
                           </Button>
@@ -405,7 +441,7 @@ function NewContractPage({ setError }) {
           {currentItemIndex !== null && (
             <VendorSelection
               item={contractItems[currentItemIndex]}
-              availableVendors={getAvailableVendorsForProduct(contractItems[currentItemIndex]?.product_id)}
+              availableVendors={contractItems[currentItemIndex]?.availableVendors || []}
               onSave={(selectedVendors) => updateVendorsForItem(contractItems[currentItemIndex].tempId, selectedVendors)}
               onCancel={() => setShowVendorModal(false)}
             />
@@ -429,8 +465,10 @@ function VendorSelection({ item, availableVendors, onSave, onCancel }) {
         vendor_name: vendorProduct.vendor_name,
         price: vendorProduct.price,
         quantity: 0,
-        max_available: vendorProduct.available,
-        min_order: vendorProduct.min_order
+        max_available: vendorProduct.available || 1000,
+        min_order: vendorProduct.min_order || 1,
+        currency: vendorProduct.currency || 'RUB',
+        delivery_days: vendorProduct.delivery_days || 0
       }
     ]);
   };
@@ -449,7 +487,7 @@ function VendorSelection({ item, availableVendors, onSave, onCancel }) {
   const isComplete = totalSelected >= item.required_quantity;
 
   return (
-    <div>
+    <>
       <Alert variant={isComplete ? 'success' : 'warning'}>
         <div className="d-flex justify-content-between">
           <span>Требуется: {item.required_quantity} {item.unit}</span>
@@ -470,9 +508,9 @@ function VendorSelection({ item, availableVendors, onSave, onCancel }) {
         <option value="">Добавить поставщика...</option>
         
         {availableVendors.map(vendor => (
-          <option key={vendor.ID} value={vendor.vendor_id}>
-            {console.log(availableVendors)}
-            {vendor.vendor_name} - {vendor.price}₽/ед. (в наличии: {vendor.available}, мин. заказ: {vendor.min_order})
+          <option key={vendor.id} value={vendor.vendor_id}>
+            {vendor.vendor_name} - {vendor.price}₽/ед. 
+            {vendor.delivery_days > 0 && ` (срок: ${vendor.delivery_days} дн.)`}
           </option>
         ))}
       </Form.Select>
@@ -486,6 +524,12 @@ function VendorSelection({ item, availableVendors, onSave, onCancel }) {
                 <strong>{vendor.vendor_name}</strong>
                 <br />
                 <small className="text-muted">Цена: {vendor.price}₽</small>
+                {vendor.delivery_days > 0 && (
+                  <>
+                    <br />
+                    <small className="text-muted">Срок: {vendor.delivery_days} дн.</small>
+                  </>
+                )}
               </Col>
               <Col md={3}>
                 <Form.Group>
@@ -536,7 +580,7 @@ function VendorSelection({ item, availableVendors, onSave, onCancel }) {
           Сохранить
         </Button>
       </div>
-    </div>
+    </>
   );
 }
 
