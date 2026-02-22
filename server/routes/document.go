@@ -17,7 +17,7 @@ func NewDocument(c *gin.Context) {
 	var input struct {
 		Doc_number   string  `json:"doc_number" binding:"required"`
 		Doc_type     string  `json:"doc_type" binding:"required"`
-		Supplier_id  int     `json:"supplier_id" binding:"required"`
+		Vendor_id    int     `json:"vendor_id" binding:"required"`
 		Status       string  `json:"status" binding:"required"`
 		Total_amount float64 `json:"total_amount" binding:"required"`
 		Description  string  `json:"description" binding:"required"`
@@ -32,7 +32,7 @@ func NewDocument(c *gin.Context) {
 		Doc_number:   input.Doc_number,
 		Doc_type:     input.Doc_type,
 		Doc_date:     time.Now(),
-		Supplier_id:  input.Supplier_id,
+		Vendor_id:    input.Vendor_id,
 		User_id:      userID,
 		Status:       input.Status,
 		Total_amount: input.Total_amount,
@@ -51,12 +51,23 @@ func NewDocument(c *gin.Context) {
 }
 
 func GetDocuments(c *gin.Context) {
+	// Создаем структуру для расширенного ответа с названиями
+	type DocumentResponse struct {
+		models.Documents
+		VendorName string `json:"vendor_name"`
+		UserName   string `json:"user_name"`
+	}
 
-	var documents []models.Documents
+	var documents []DocumentResponse
+
+	// Выполняем запрос с JOIN для получения названий
 	result := database.DB.
-		Select("*").
-		Order("created_at DESC").
-		Find(&documents)
+		Table("documents").
+		Select("documents.*, vendors.company_name as vendor_name, users.full_name as user_name").
+		Joins("LEFT JOIN vendors ON vendors.id = documents.vendor_id").
+		Joins("LEFT JOIN users ON users.id = documents.user_id").
+		Order("documents.created_at DESC").
+		Scan(&documents)
 
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get documents"})
@@ -106,7 +117,7 @@ func UpdDocumentByID(c *gin.Context) {
 	var input struct {
 		Doc_number   string  `json:"doc_number" binding:"required"`
 		Doc_type     string  `json:"doc_type" binding:"required"`
-		Supplier_id  int     `json:"supplier_id" binding:"required"`
+		Vendor_id    int     `json:"vendor_id" binding:"required"`
 		Status       string  `json:"status" binding:"required"`
 		Total_amount float64 `json:"total_amount" binding:"required"`
 		Description  string  `json:"description" binding:"required"`
@@ -127,7 +138,7 @@ func UpdDocumentByID(c *gin.Context) {
 		Doc_number:   input.Doc_number,
 		Doc_type:     input.Doc_type,
 		Doc_date:     time.Now(),
-		Supplier_id:  input.Supplier_id,
+		Vendor_id:    input.Vendor_id,
 		User_id:      userID,
 		Status:       input.Status,
 		Total_amount: input.Total_amount,

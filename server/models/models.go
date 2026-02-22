@@ -69,14 +69,26 @@ type Documents struct {
 	Doc_number   string    `gorm:"not null"`
 	Doc_type     string    `gorm:"not null"`
 	Doc_date     time.Time `gorm:"not null"`
-	Supplier_id  int
+	Vendor_id    int
 	User_id      uint
-	Status       string  `gorm:"default:draft"`
+	Status       string  `gorm:"default:Черновик"`
 	Total_amount float64 `gorm:"default:0"`
 	Currency     string  `gorm:"default:RUB"`
-	File_path    string
 	Description  string
 	Created_at   time.Time
+}
+
+// ContractDistribution - распределение товаров по поставщикам в договоре
+type ContractDistribution struct {
+	ID          uint    `gorm:"primaryKey"`
+	DocumentID  int     `gorm:"not null;index"` // ID договора
+	ProductID   int     `gorm:"not null"`       // ID товара
+	VendorID    int     `gorm:"not null"`       // ID поставщика
+	Quantity    float64 `gorm:"not null"`       // Количество
+	Price       float64 `gorm:"not null"`       // Цена за единицу
+	Currency    string  `gorm:"default:RUB"`    // Валюта
+	TotalAmount float64 `gorm:"not null"`       // Общая сумма (quantity * price)
+	CreatedAt   time.Time
 }
 
 type Document_Items struct {

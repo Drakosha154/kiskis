@@ -170,27 +170,66 @@ function NewContractPage({ setError }) {
   };
 
   const handleSubmit = async () => {
-    // Проверка заполненности
-    for (const item of contractItems) {
-      if (item.total_allocated < item.required_quantity) {
-        alert(`Товар "${item.product_name}" распределен не полностью (${item.total_allocated} из ${item.required_quantity})`);
-        return;
-      }
+  // Проверка заполненности
+  for (const item of contractItems) {
+    if (item.total_allocated < item.required_quantity) {
+      alert(`Товар "${item.product_name}" распределен не полностью (${item.total_allocated} из ${item.required_quantity})`);
+      return;
     }
+  }
 
-    const token = localStorage.getItem('token');
-    
-    // Создаем документ
-    const documentData = {
-      doc_number: contractData.doc_number,
-      doc_type: 'purchase_contract',
-      supplier_id: 0, // 0 означает несколько поставщиков
-      status: 'draft',
-      total_amount: calculateGrandTotal(),
-      description: `Доставка: ${contractData.delivery_address}\nУсловия оплаты: ${getPaymentTermsText(contractData.payment_terms)}\nДата доставки: ${contractData.delivery_date}\n${contractData.description}`,
-    };
+  const token = localStorage.getItem('token');
+  
+  // Группируем товары по поставщикам
+  const vendorGroups = {};
+  
+  contractItems.forEach(item => {
+    item.vendors.forEach(vendor => {
+      if (!vendorGroups[vendor.vendor_id]) {
+        vendorGroups[vendor.vendor_id] = {
+          vendor_id: vendor.vendor_id,
+          vendor_name: vendor.vendor_name,
+          items: [],
+          total_amount: 0
+        };
+      }
+      
+      // Добавляем товар для этого поставщика
+      vendorGroups[vendor.vendor_id].items.push({
+        product_id: item.product_id,
+        product_name: item.product_name,
+        quantity: vendor.quantity,
+        price: vendor.price,
+        unit: item.unit,
+        amount: vendor.quantity * vendor.price
+      });
+      
+      vendorGroups[vendor.vendor_id].total_amount += vendor.quantity * vendor.price;
+    });
+  });
 
-    try {
+  try {
+    setLoading(true);
+    const createdContracts = [];
+
+    // Создаем отдельный договор для каждого поставщика
+    for (const vendorId in vendorGroups) {
+      const vendorGroup = vendorGroups[vendorId];
+      
+      // Формируем описание с детализацией товаров
+      const itemsDescription = vendorGroup.items.map(item => 
+        `- ${item.product_name}: ${item.quantity} ${item.unit} × ${item.price}₽ = ${item.amount}₽`
+      ).join('\n');
+
+      const documentData = {
+        doc_number: `${contractData.doc_number}-${vendorGroup.vendor_id}`, // Добавляем суффикс с ID поставщика
+        doc_type: 'Договор',
+        vendor_id: vendorGroup.vendor_id,
+        status: 'Черновик',
+        total_amount: vendorGroup.total_amount,
+        description: `Поставщик: ${vendorGroup.vendor_name}\n\nСостав поставки:\n${itemsDescription}\n\n---\nАдрес доставки: ${contractData.delivery_address}\nУсловия оплаты: ${getPaymentTermsText(contractData.payment_terms)}\nДата доставки: ${contractData.delivery_date}\n${contractData.description}`,
+      };
+
       const docResponse = await fetch('http://localhost:8080/api/documents', {
         method: 'POST',
         headers: {
@@ -200,35 +239,27 @@ function NewContractPage({ setError }) {
         body: JSON.stringify(documentData)
       });
 
-      if (!docResponse.ok) throw new Error('Failed to create document');
+      if (!docResponse.ok) {
+        const errorData = await docResponse.json();
+        throw new Error(errorData.error || 'Failed to create document');
+      }
       
       const docResult = await docResponse.json();
-      
-      // Здесь можно сохранить детали распределения по поставщикам
-      // в отдельную таблицу или как JSON поле в документе
-      const distributionData = {
-        document_id: docResult.id,
-        items: contractItems.map(item => ({
-          product_id: item.product_id,
-          required_quantity: item.required_quantity,
-          vendors: item.vendors.map(v => ({
-            vendor_id: v.vendor_id,
-            quantity: v.quantity,
-            price: v.price,
-            currency: v.currency || 'RUB'
-          }))
-        }))
-      };
-
-      // TODO: Сохранить distributionData в отдельный эндпоинт
-      console.log('Distribution data:', distributionData);
-      
-      alert('Договор успешно создан');
-      navigate('/contracts');
-    } catch (err) {
-      setError('Ошибка создания договора: ' + err.message);
+      createdContracts.push({
+        ...docResult,
+        vendor_name: vendorGroup.vendor_name,
+        items: vendorGroup.items
+      });
     }
-  };
+    
+    alert(`Создано договоров: ${createdContracts.length}`);
+  } catch (err) {
+    setError('Ошибка создания договора: ' + err.message);
+    console.error('Submission error:', err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const getPaymentTermsText = (term) => {
     const terms = {

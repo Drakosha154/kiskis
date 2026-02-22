@@ -28,6 +28,7 @@ function DocumentsPage({ setError }) {
       }
 
       const data = await response.json();
+      console.log(data)
       setDocuments(data.documents || []);
     } catch (err) {
       console.error('Ошибка загрузки документов:', err);
@@ -59,18 +60,6 @@ function DocumentsPage({ setError }) {
     if (!dateString) return 'Н/Д';
     const date = new Date(dateString);
     return date.toLocaleString('ru-RU');
-  };
-
-  // Получение класса для статуса
-  const getStatusClass = (status) => {
-    const statusMap = {
-      'Черновик': 'secondary',
-      'Активен': 'success',
-      'На согласовании': 'warning',
-      'Завершен': 'info',
-      'Расторгнут': 'danger'
-    };
-    return `badge bg-${statusMap[status] || 'light'} text-dark`;
   };
 
   // Форматирование суммы
@@ -121,35 +110,33 @@ function DocumentsPage({ setError }) {
               <tr>
                 <th>№ договора</th>
                 <th>Тип</th>
-                <th>ID поставщика</th>
+                <th>Поставщик</th>
                 <th>Дата</th>
                 <th>Статус</th>
-                <th className="text-end">Сумма</th>
-                <th className="text-center">Действия</th>
+                <th>Сумма</th>
+                <th>Действия</th>
               </tr>
             </thead>
             <tbody>
               {documents.map((doc) => (
-                <tr key={doc.id}>
+                <tr key={doc.ID}>
                   <td>
-                    <strong>{doc.doc_number}</strong>
+                    <strong>{doc.Doc_number}</strong>
                   </td>
-                  <td>{doc.doc_type}</td>
+                  <td>{doc.Doc_type}</td>
                   <td>
                     <i className="bi bi-building me-1 text-muted"></i>
-                    {doc.supplier_id}
+                    {doc.vendor_name}
                   </td>
                   <td>
                     <i className="bi bi-calendar me-1 text-muted"></i>
-                    {formatDate(doc.doc_date)}
+                    {formatDate(doc.Doc_date)}
                   </td>
                   <td>
-                    <span className={getStatusClass(doc.status)}>
-                      {doc.status}
-                    </span>
+                      {doc.Status}
                   </td>
-                  <td className="text-end">
-                    <strong>{/*formatAmount(doc.total_amount)*/}</strong>
+                  <td className="text-center">
+                    <strong>{formatAmount(doc.Total_amount)}</strong>
                   </td>
                   <td className="text-center">
                     <button
@@ -190,13 +177,13 @@ function DocumentsPage({ setError }) {
                         <p className="mb-2">
                           <strong>Номер договора:</strong>
                         </p>
-                        <p className="text-primary h5">{selectedDocument.doc_number}</p>
+                        <p className="text-primary h5">{selectedDocument.Doc_number}</p>
                       </div>
                       <div className="col-md-6">
                         <p className="mb-2">
                           <strong>Тип документа:</strong>
                         </p>
-                        <p>{selectedDocument.doc_type}</p>
+                        <p>{selectedDocument.Doc_type}</p>
                       </div>
                     </div>
                     
@@ -207,7 +194,7 @@ function DocumentsPage({ setError }) {
                         </p>
                         <p>
                           <i className="bi bi-calendar me-2 text-muted"></i>
-                          {formatDateTime(selectedDocument.created_at)}
+                          {formatDateTime(selectedDocument.Created_at)}
                         </p>
                       </div>
                       <div className="col-md-6">
@@ -216,7 +203,7 @@ function DocumentsPage({ setError }) {
                         </p>
                         <p>
                           <i className="bi bi-clock me-2 text-muted"></i>
-                          {formatDate(selectedDocument.doc_date)}
+                          {formatDate(selectedDocument.Doc_date)}
                         </p>
                       </div>
                     </div>
@@ -230,20 +217,20 @@ function DocumentsPage({ setError }) {
                     <div className="row">
                       <div className="col-md-6">
                         <p className="mb-2">
-                          <strong>ID поставщика:</strong>
+                          <strong>Поставщик:</strong>
                         </p>
                         <p>
                           <i className="bi bi-building me-2 text-muted"></i>
-                          {selectedDocument.supplier_id}
+                          {selectedDocument.vendor_name}
                         </p>
                       </div>
                       <div className="col-md-6">
                         <p className="mb-2">
-                          <strong>ID пользователя:</strong>
+                          <strong>Пользователь:</strong>
                         </p>
                         <p>
                           <i className="bi bi-person me-2 text-muted"></i>
-                          {selectedDocument.user_id}
+                          {selectedDocument.user_name}
                         </p>
                       </div>
                     </div>
@@ -261,16 +248,14 @@ function DocumentsPage({ setError }) {
                         </p>
                         <p className="text-success h4">
                           <i className="bi bi-currency-dollar me-1"></i>
-                          {/*formatAmount(selectedDocument.total_amount)*/}
+                          {formatAmount(selectedDocument.Total_amount)}
                         </p>
                       </div>
                       <div className="col-md-6">
                         <p className="mb-2">
                           <strong>Статус:</strong>
                         </p>
-                        <span className={getStatusClass(selectedDocument.status)} style={{ fontSize: '1.1rem', padding: '8px' }}>
-                          {selectedDocument.status}
-                        </span>
+                          {selectedDocument.Status}
                       </div>
                     </div>
                   </div>
@@ -281,15 +266,9 @@ function DocumentsPage({ setError }) {
                   <div className="card-body">
                     <h5 className="border-bottom pb-2 mb-3">Описание</h5>
                     <p className="mb-0">
-                      {selectedDocument.description || 'Нет описания'}
+                      {selectedDocument.Description || 'Нет описания'}
                     </p>
                   </div>
-                </div>
-
-                {/* Дополнительная информация */}
-                <div className="mt-3 text-muted small">
-                  <i className="bi bi-tag me-1"></i>
-                  ID документа: {selectedDocument.id}
                 </div>
               </div>
               <div className="modal-footer bg-light">
