@@ -9,7 +9,7 @@ export default function Navbar() {
 
         {/* Ссылка на админ-панель справа в виде кнопки */}
         <div className="d-flex">
-          <a className="btn btn-outline-light btn-sm" href="/roflik">
+          <a className="btn btn-outline-light btn-sm" href="/login">
             <i className="bi bi-gear-fill me-1">
             </i>
             Нажми

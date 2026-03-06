@@ -10,7 +10,10 @@ import {
   Col,
   Card,
   Spinner,
-  Dropdown
+  Dropdown,
+  Tabs,
+  Tab,
+  Alert
 } from 'react-bootstrap';
 
 function WarehousePage({ setError }) {
@@ -25,7 +28,21 @@ function WarehousePage({ setError }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showStockModal, setShowStockModal] = useState(false);
+  const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  
+  // Состояния для договоров и документов
+  const [contracts, setContracts] = useState([]);
+  const [selectedContract, setSelectedContract] = useState(null);
+  const [contractProducts, setContractProducts] = useState([]);
+  const [activeTab, setActiveTab] = useState('contracts');
+  
+  // Состояния для приёмки
+  const [receiptStep, setReceiptStep] = useState(1); // 1: выбор договора, 2: приёмка
+  const [receivedItems, setReceivedItems] = useState([]);
+  const [discrepancies, setDiscrepancies] = useState([]);
+  const [receiptNotes, setReceiptNotes] = useState('');
+  const [receiptDocument, setReceiptDocument] = useState(null);
   
   // Состояния для сортировки
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
@@ -57,104 +74,108 @@ function WarehousePage({ setError }) {
 
   const categories = ['Все', 'Ткани', 'Фурнитура', 'Нитки', 'Упаковка', 'Готовая продукция'];
 
+  // Загрузка данных
   useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true);
-      try {
-        setTimeout(() => {
-          const mockProducts = [
-            {
-              id: 1,
-              article: 'FAB-001',
-              name: 'Хлопковая ткань',
-              description: '100% хлопок, ширина 150см',
-              category: 'Ткани',
-              unit: 'м',
-              min_stock: 50,
-              current_stock: 125.5,
-              price: 450.00,
-              location: 'A-01-02',
-              last_updated: '2024-01-15'
-            },
-            {
-              id: 2,
-              article: 'FAB-002',
-              name: 'Льняная ткань',
-              description: 'Натуральный лен, ширина 140см',
-              category: 'Ткани',
-              unit: 'м',
-              min_stock: 40,
-              current_stock: 32.0,
-              price: 680.00,
-              location: 'A-01-03',
-              last_updated: '2024-01-14'
-            },
-            {
-              id: 3,
-              article: 'ACC-001',
-              name: 'Пуговицы пластиковые',
-              description: 'Черные, диаметр 15мм',
-              category: 'Фурнитура',
-              unit: 'шт',
-              min_stock: 500,
-              current_stock: 1250,
-              price: 2.50,
-              location: 'B-02-01',
-              last_updated: '2024-01-13'
-            },
-            {
-              id: 4,
-              article: 'ACC-002',
-              name: 'Молния тракторная',
-              description: 'Длина 60см, черная',
-              category: 'Фурнитура',
-              unit: 'шт',
-              min_stock: 200,
-              current_stock: 85,
-              price: 45.00,
-              location: 'B-02-04',
-              last_updated: '2024-01-12'
-            },
-            {
-              id: 5,
-              article: 'THR-001',
-              name: 'Нитки полиэстер',
-              description: 'Катушка 1000м, белые',
-              category: 'Нитки',
-              unit: 'шт',
-              min_stock: 100,
-              current_stock: 230,
-              price: 35.00,
-              location: 'C-01-01',
-              last_updated: '2024-01-15'
-            }
-          ];
-          setProducts(mockProducts);
-          setFilteredProducts(mockProducts);
-          setLoading(false);
-        }, 500);
-      } catch (error) {
-        setError('Ошибка загрузки данных склада');
-        setLoading(false);
-      }
-    };
-
     fetchProducts();
-  }, [setError]);
+    fetchContracts();
+  }, []);
 
   useEffect(() => {
+    filterAndSortProducts();
+  }, [products, searchTerm, categoryFilter, stockFilter, sortConfig]);
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch('http://localhost:8080/api/products', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch products');
+      const data = await response.json();
+      
+      // Добавляем поля current_stock и price, так как в БД их может не быть
+      const productsWithStock = (data.products || []).map(p => ({
+        ...p,
+        current_stock: p.current_stock || 0,
+        price: p.price || 0,
+        location: p.location || 'Не указано'
+      }));
+      
+      setProducts(productsWithStock);
+    } catch (error) {
+      setError('Ошибка загрузки данных склада');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchContracts = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch('http://localhost:8080/api/documents', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch documents');
+      const data = await response.json();
+      
+      // Фильтруем только договоры (doc_type = 'Договор')
+      const contractsList = (data.documents || []).filter(doc => doc.Doc_type === 'Договор' && doc.Status !== 'Завершён');
+      setContracts(contractsList);
+    } catch (error) {
+      console.error('Ошибка загрузки договоров:', error);
+    }
+  };
+
+  const fetchContractProducts = async (vendorId) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`http://localhost:8080/api/vendor-products/${vendorId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch vendor products');
+      const data = await response.json();
+
+      console.log(data)
+      
+      // Преобразуем данные для отображения
+      const products = (data.vendorProducts || []).map(vp => ({
+        id: vp.id,
+        product_id: vp.product_id,
+        product_name: vp.product_name,
+        product_article: vp.product_article,
+        vendor_price: vp.vendor_price,
+        currency: vp.currency,
+        delivery_days: vp.delivery_days,
+        expected_quantity: 0,
+        received_quantity: 0,
+        unit: 'шт'
+      }));
+
+      console.log(products)
+      
+      setContractProducts(products);
+    } catch (error) {
+      setError('Ошибка загрузки товаров договора');
+    }
+  };
+
+  const filterAndSortProducts = () => {
     let result = [...products];
     
     if (searchTerm) {
       result = result.filter(product => 
-        product.article.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchTerm.toLowerCase())
+        product.Article?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.Name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.Description?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     
     if (categoryFilter !== 'all') {
-      result = result.filter(product => product.category === categoryFilter);
+      result = result.filter(product => product.Category === categoryFilter);
     }
     
     if (stockFilter === 'low') {
@@ -164,17 +185,193 @@ function WarehousePage({ setError }) {
     }
     
     result.sort((a, b) => {
-      if (a[sortConfig.key] < b[sortConfig.key]) {
+      const aVal = a[sortConfig.key] || '';
+      const bVal = b[sortConfig.key] || '';
+      if (aVal < bVal) {
         return sortConfig.direction === 'asc' ? -1 : 1;
       }
-      if (a[sortConfig.key] > b[sortConfig.key]) {
+      if (aVal > bVal) {
         return sortConfig.direction === 'asc' ? 1 : -1;
       }
       return 0;
     });
     
     setFilteredProducts(result);
-  }, [products, searchTerm, categoryFilter, stockFilter, sortConfig]);
+  };
+
+  const handleSelectContract = (contract) => {
+    setSelectedContract(contract);
+    fetchContractProducts(contract.Vendor_id);
+    setActiveTab('products');
+  };
+
+  const handleStartReceipt = () => {
+    if (!selectedContract) return;
+    
+    // Инициализируем список принимаемых товаров
+    const initialItems = contractProducts.map(cp => ({
+      ...cp,
+      expected_quantity: cp.expected_quantity || 0,
+      received_quantity: 0,
+      status: 'pending'
+    }));
+    
+    setReceivedItems(initialItems);
+    setReceiptStep(2);
+  };
+
+  const handleQuantityChange = (index, field, value) => {
+    const updated = [...receivedItems];
+    updated[index][field] = parseFloat(value) || 0;
+    
+    // Проверяем на расхождения
+    if (updated[index].expected_quantity !== updated[index].received_quantity) {
+      if (!discrepancies.find(d => d.index === index)) {
+        setDiscrepancies([...discrepancies, { 
+          index, 
+          productName: updated[index].product_name 
+        }]);
+      }
+    } else {
+      setDiscrepancies(discrepancies.filter(d => d.index !== index));
+    }
+    
+    setReceivedItems(updated);
+  };
+
+  const handleCompleteReceipt = async () => {
+    const token = localStorage.getItem('token');
+    
+    try {
+      setLoading(true);
+      
+      // 1. Создаём документ прихода
+      const receiptDoc = {
+        doc_number: `PR-${Date.now()}`,
+        doc_type: 'Приход',
+        vendor_id: selectedContract.Vendor_id,
+        status: discrepancies.length > 0 ? 'Расхождение' : 'Завершён',
+        total_amount: calculateTotalAmount(),
+        description: `Приход товаров по договору ${selectedContract.Doc_number}\n${receiptNotes}`
+      };
+
+      const docResponse = await fetch('http://localhost:8080/api/documents', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(receiptDoc)
+      });
+
+      if (!docResponse.ok) {
+        const errorData = await docResponse.json();
+        throw new Error(errorData.error || 'Failed to create receipt document');
+      }
+      
+      const docResult = await docResponse.json();
+      setReceiptDocument(docResult);
+
+      // 2. Обновляем остатки на складе для каждого товара
+      for (const item of receivedItems) {
+        if (item.received_quantity > 0) {
+          // Находим товар в списке продуктов
+          const product = products.find(p => p.ID === item.product_id);
+          
+          if (product) {
+            // Обновляем товар с новым количеством
+            const updatedProduct = {
+              ...product,
+              current_stock: (product.current_stock || 0) + item.received_quantity,
+              price: item.vendor_price || product.price // Обновляем цену если нужно
+            };
+
+            await fetch(`http://localhost:8080/api/products/${item.product_id}`, {
+              method: 'PATCH',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                article: product.Article,
+                name: product.Name,
+                description: product.Description,
+                unit: product.Unit,
+                category: product.Category,
+                min_stock: product.min_stock,
+                current_stock: (product.current_stock || 0) + item.received_quantity,
+                price: item.vendor_price || product.price,
+                location: product.location || 'Не указано'
+              })
+            });
+          }
+        }
+      }
+
+      // 3. Если есть расхождения, обновляем статус договора
+      if (discrepancies.length > 0) {
+        await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            doc_number: selectedContract.Doc_number,
+            doc_type: selectedContract.Doc_type,
+            vendor_id: selectedContract.Vendor_id,
+            status: 'Частично исполнен',
+            total_amount: selectedContract.Total_amount,
+            description: `${selectedContract.Description}\n\nОбнаружены расхождения при приёмке: ${discrepancies.map(d => d.productName).join(', ')}`
+          })
+        });
+      } else {
+        // Если расхождений нет, завершаем договор
+        await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            doc_number: selectedContract.Doc_number,
+            doc_type: selectedContract.Doc_type,
+            vendor_id: selectedContract.Vendor_id,
+            status: 'Исполнен',
+            total_amount: selectedContract.Total_amount,
+            description: selectedContract.Description
+          })
+        });
+      }
+
+      // 4. Обновляем данные
+      await fetchProducts();
+      await fetchContracts();
+      
+      // Показываем сообщение об успехе
+      alert(`Приёмка завершена. Создан документ: ${receiptDoc.doc_number}`);
+      
+      // Закрываем модальное окно
+      handleCloseReceiveModal();
+      
+    } catch (error) {
+      setError('Ошибка при оформлении приёмки: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCloseReceiveModal = () => {
+    setShowReceiveModal(false);
+    setReceiptStep(1);
+    setSelectedContract(null);
+    setContractProducts([]);
+    setReceivedItems([]);
+    setDiscrepancies([]);
+    setReceiptNotes('');
+    setReceiptDocument(null);
+    setActiveTab('contracts');
+  };
 
   const handleSort = (key) => {
     setSortConfig({
@@ -200,26 +397,93 @@ function WarehousePage({ setError }) {
   };
 
   const handleAddProduct = async () => {
+    const token = localStorage.getItem('token');
     try {
-      console.log('Adding product:', formData);
+      setLoading(true);
+      
+      const productData = {
+        article: formData.article,
+        name: formData.name,
+        description: formData.description,
+        unit: formData.unit,
+        category: formData.category,
+        min_stock: formData.min_stock
+      };
+
+      const response = await fetch('http://localhost:8080/api/products', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(productData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create product');
+      }
+
+      await fetchProducts();
       setShowAddModal(false);
+      resetForm();
+      
     } catch (error) {
-      setError('Ошибка при добавлении товара');
+      setError('Ошибка при добавлении товара: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleEditProduct = async () => {
+    const token = localStorage.getItem('token');
     try {
-      console.log('Editing product:', selectedProduct.id, formData);
+      setLoading(true);
+      
+      const productData = {
+        article: formData.article,
+        name: formData.name,
+        description: formData.description,
+        unit: formData.unit,
+        category: formData.category,
+        min_stock: formData.min_stock
+      };
+
+      const response = await fetch(`http://localhost:8080/api/products/${selectedProduct.ID}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(productData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update product');
+      }
+
+      await fetchProducts();
       setShowEditModal(false);
+      
     } catch (error) {
-      setError('Ошибка при обновлении товара');
+      setError('Ошибка при обновлении товара: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleDeleteProduct = async () => {
+    const token = localStorage.getItem('token');
     try {
-      console.log('Deleting product:', selectedProduct.id);
+      const response = await fetch(`http://localhost:8080/api/products/${selectedProduct.ID}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to delete product');
+
+      await fetchProducts();
       setShowDeleteModal(false);
     } catch (error) {
       setError('Ошибка при удалении товара');
@@ -227,15 +491,86 @@ function WarehousePage({ setError }) {
   };
 
   const handleStockMovement = async () => {
+    const token = localStorage.getItem('token');
     try {
-      console.log('Stock movement:', {
-        productId: selectedProduct.id,
-        ...stockMovement
+      setLoading(true);
+      
+      // Обновляем количество товара
+      const product = selectedProduct;
+      const newStock = stockMovement.type === 'income' 
+        ? (product.current_stock + stockMovement.quantity)
+        : (product.current_stock - stockMovement.quantity);
+
+      if (newStock < 0) {
+        throw new Error('Недостаточно товара на складе');
+      }
+
+      const productData = {
+        article: product.Article,
+        name: product.Name,
+        description: product.Description,
+        unit: product.Unit,
+        category: product.Category,
+        min_stock: product.min_stock,
+        current_stock: newStock,
+        price: product.price,
+        location: product.location
+      };
+
+      await fetch(`http://localhost:8080/api/products/${product.ID}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(productData)
       });
+
+      // Создаём документ движения
+      const movementDoc = {
+        doc_number: `MOV-${Date.now()}`,
+        doc_type: stockMovement.type === 'income' ? 'Приход' : 'Расход',
+        vendor_id: 0, // Для ручного движения можно не указывать
+        status: 'Завершён',
+        total_amount: stockMovement.quantity * (product.price || 0),
+        description: `${stockMovement.type === 'income' ? 'Приход' : 'Расход'}: ${stockMovement.quantity} ${product.Unit}. ${stockMovement.reason}`
+      };
+
+      await fetch('http://localhost:8080/api/documents', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(movementDoc)
+      });
+
+      await fetchProducts();
       setShowStockModal(false);
+      
     } catch (error) {
-      setError('Ошибка при движении товара');
+      setError('Ошибка при движении товара: ' + error.message);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      article: '',
+      name: '',
+      description: '',
+      category: '',
+      unit: 'шт',
+      min_stock: 10,
+      current_stock: 0,
+      price: 0,
+      location: ''
+    });
+  };
+
+  const calculateTotalAmount = () => {
+    return receivedItems.reduce((sum, item) => sum + (item.received_quantity * (item.vendor_price || 0)), 0);
   };
 
   const getStockStatus = (current, min) => {
@@ -265,14 +600,11 @@ function WarehousePage({ setError }) {
         </Col>
         <Col className="text-end">
           <Button 
-            variant="success" 
-            onClick={() => setShowAddModal(true)}
+            variant="primary" 
+            onClick={() => setShowReceiveModal(true)}
             className="me-2"
           >
-            + Добавить товар
-          </Button>
-          <Button variant="secondary">
-            Отчет
+            📦 Приёмка товара
           </Button>
         </Col>
       </Row>
@@ -323,9 +655,7 @@ function WarehousePage({ setError }) {
           <Row>
             <Col md={4}>
               <InputGroup>
-                <InputGroup.Text>
-                  🔍
-                </InputGroup.Text>
+                <InputGroup.Text>🔍</InputGroup.Text>
                 <Form.Control
                   placeholder="Поиск по артикулу, названию..."
                   value={searchTerm}
@@ -360,8 +690,8 @@ function WarehousePage({ setError }) {
                   ↕️ Сортировка
                 </Dropdown.Toggle>
                 <Dropdown.Menu>
-                  <Dropdown.Item onClick={() => handleSort('name')}>По названию</Dropdown.Item>
-                  <Dropdown.Item onClick={() => handleSort('category')}>По категории</Dropdown.Item>
+                  <Dropdown.Item onClick={() => handleSort('Name')}>По названию</Dropdown.Item>
+                  <Dropdown.Item onClick={() => handleSort('Category')}>По категории</Dropdown.Item>
                   <Dropdown.Item onClick={() => handleSort('current_stock')}>По количеству</Dropdown.Item>
                   <Dropdown.Item onClick={() => handleSort('price')}>По цене</Dropdown.Item>
                 </Dropdown.Menu>
@@ -392,21 +722,21 @@ function WarehousePage({ setError }) {
               {filteredProducts.map(product => {
                 const status = getStockStatus(product.current_stock, product.min_stock);
                 return (
-                  <tr key={product.id} className={product.current_stock <= product.min_stock ? 'table-warning' : ''}>
-                    <td><strong>{product.article}</strong></td>
-                    <td>{product.name}</td>
-                    <td>{product.category}</td>
+                  <tr key={product.ID} className={product.current_stock <= product.min_stock ? 'table-warning' : ''}>
+                    <td><strong>{product.Article}</strong></td>
+                    <td>{product.Name}</td>
+                    <td>{product.Category}</td>
                     <td className="text-center">
-                      {formatNumber(product.current_stock)} {product.unit}
+                      {formatNumber(product.current_stock)} {product.Unit}
                     </td>
                     <td className="text-center">
-                      {product.min_stock} {product.unit}
+                      {product.min_stock} {product.Unit}
                     </td>
                     <td className="text-end">{formatNumber(product.price)} ₽</td>
                     <td className="text-end">
                       {formatNumber(product.current_stock * product.price)} ₽
                     </td>
-                    <td>{product.location}</td>
+                    <td>{product.location || 'Не указано'}</td>
                     <td>
                       <Badge bg={status.variant}>
                         {status.text}
@@ -419,7 +749,17 @@ function WarehousePage({ setError }) {
                         className="me-1"
                         onClick={() => {
                           setSelectedProduct(product);
-                          setFormData(product);
+                          setFormData({
+                            article: product.Article,
+                            name: product.Name,
+                            description: product.Description || '',
+                            category: product.Category,
+                            unit: product.Unit,
+                            min_stock: product.min_stock,
+                            current_stock: product.current_stock,
+                            price: product.price,
+                            location: product.location || ''
+                          });
                           setShowEditModal(true);
                         }}
                       >
@@ -466,6 +806,294 @@ function WarehousePage({ setError }) {
         </Card.Body>
       </Card>
 
+      {/* Модальное окно приёмки товара */}
+<Modal show={showReceiveModal} onHide={handleCloseReceiveModal} size="xl">
+  <Modal.Header closeButton>
+    <Modal.Title>
+      {receiptStep === 1 && 'Выбор договора для приёмки'}
+      {receiptStep === 2 && 'Приёмка товара по договору'}
+    </Modal.Title>
+  </Modal.Header>
+  <Modal.Body>
+    {receiptStep === 1 && (
+      <Tabs
+        activeKey={activeTab}
+        onSelect={(k) => {
+          setActiveTab(k);
+          // Если переключились на вкладку продуктов, но договор не выбран
+          if (k === 'products' && !selectedContract) {
+            // Можно показать подсказку или ничего не делать
+          }
+        }}
+        className="mb-3"
+      >
+        <Tab eventKey="contracts" title="Активные договоры">
+          {contracts.length === 0 ? (
+            <Alert variant="info">
+              Нет активных договоров. Создайте договор на странице "Закл. договоров".
+            </Alert>
+          ) : (
+            <Table striped hover>
+              <thead>
+                <tr>
+                  <th>№ договора</th>
+                  <th>Поставщик</th>
+                  <th>Дата</th>
+                  <th>Сумма</th>
+                  <th>Статус</th>
+                  <th>Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contracts.map(contract => (
+                  <tr key={contract.ID}>
+                    <td><strong>{contract.Doc_number}</strong></td>
+                    <td>{contract.vendor_name}</td>
+                    <td>{new Date(contract.Doc_date).toLocaleDateString()}</td>
+                    <td>{formatNumber(contract.Total_amount)} ₽</td>
+                    <td>
+                      <Badge bg={contract.Status === 'Черновик' ? 'secondary' : 'success'}>
+                        {contract.Status}
+                      </Badge>
+                    </td>
+                    <td>
+                      <Button 
+                        size="sm" 
+                        variant="primary"
+                        onClick={() => {
+                          handleSelectContract(contract);
+                          setActiveTab('products'); // Автоматически переключаем на вкладку с товарами
+                        }}
+                      >
+                        Выбрать
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+        </Tab>
+        
+        <Tab eventKey="products" title="Товары договора" disabled={!selectedContract}>
+          {selectedContract ? (
+            <div>
+              <Alert variant="success" className="mb-3">
+                <Row>
+                  <Col>
+                    <strong>Договор:</strong> {selectedContract.Doc_number}
+                  </Col>
+                  <Col>
+                    <strong>Поставщик:</strong> {selectedContract.vendor_name}
+                  </Col>
+                  <Col>
+                    <strong>Статус:</strong>{' '}
+                    <Badge bg={selectedContract.Status === 'Черновик' ? 'secondary' : 'success'}>
+                      {selectedContract.Status}
+                    </Badge>
+                  </Col>
+                </Row>
+              </Alert>
+              
+              {contractProducts.length === 0 ? (
+                <div className="text-center py-4">
+                  <Spinner animation="border" variant="primary" size="sm" className="me-2" />
+                  <span>Загрузка товаров договора...</span>
+                </div>
+              ) : (
+                <>
+                  <Table striped bordered hover>
+                    <thead>
+                      <tr>
+                        <th>№</th>
+                        <th>Товар</th>
+                        <th>Артикул</th>
+                        <th className="text-center">Цена</th>
+                        <th className="text-center">Срок доставки</th>
+                        <th className="text-center">Валюта</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {contractProducts.map((product, idx) => (
+                        <tr key={product.id || idx}>
+                          <td>{idx + 1}</td>
+                          <td>{product.product_name}</td>
+                          <td>{product.product_article}</td>
+                          <td className="text-center">{formatNumber(product.vendor_price)}</td>
+                          <td className="text-center">{product.delivery_days} дн.</td>
+                          <td className="text-center">{product.currency}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan="3" className="text-end"><strong>Всего позиций:</strong></td>
+                        <td colSpan="3"><strong>{contractProducts.length}</strong></td>
+                      </tr>
+                    </tfoot>
+                  </Table>
+                  
+                  <div className="d-flex justify-content-between mt-3">
+                    <Button 
+                      variant="secondary" 
+                      onClick={() => setActiveTab('contracts')}
+                    >
+                      ← К списку договоров
+                    </Button>
+                    <Button 
+                      variant="success" 
+                      onClick={handleStartReceipt}
+                      size="lg"
+                    >
+                      Начать приёмку товаров →
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <Alert variant="warning">
+              <Alert.Heading>Договор не выбран</Alert.Heading>
+              <p>
+                Пожалуйста, перейдите на вкладку "Активные договоры" и выберите договор, 
+                по которому будет производиться приёмка товаров.
+              </p>
+              <Button 
+                variant="warning" 
+                onClick={() => setActiveTab('contracts')}
+              >
+                Перейти к выбору договора
+              </Button>
+            </Alert>
+          )}
+        </Tab>
+      </Tabs>
+    )}
+          {console.log(receiptStep)}
+          {console.log(selectedContract)}
+          {receiptStep === 2 && selectedContract && (
+            <div>
+              <Alert variant="info">
+                {console.log(selectedContract)}
+                <Row>
+                  <Col>
+                    <strong>Договор:</strong> {selectedContract.Doc_number}
+                  </Col>
+                  <Col>
+                    <strong>Поставщик:</strong> {selectedContract.vendor_name}
+                  </Col>
+                  <Col>
+                    <strong>Дата:</strong> {new Date(selectedContract.Doc_date).toLocaleDateString()}
+                  </Col>
+                </Row>
+              </Alert>
+              
+              <Table striped bordered hover>
+                <thead>
+                  <tr>
+                    <th>Товар</th>
+                    <th>Артикул</th>
+                    <th className="text-center">Ожидаемое кол-во</th>
+                    <th className="text-center">Фактическое кол-во</th>
+                    <th className="text-center">Ед. изм.</th>
+                    <th className="text-end">Цена</th>
+                    <th className="text-end">Сумма</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {receivedItems.map((item, index) => (
+                    <tr key={index} className={item.expected_quantity !== item.received_quantity ? 'table-warning' : ''}>
+                      <td>{item.product_name}</td>
+                      <td>{item.product_article}</td>
+                      <td className="text-center">
+                        <Form.Control
+                          type="number"
+                          value={item.expected_quantity}
+                          onChange={(e) => handleQuantityChange(index, 'expected_quantity', e.target.value)}
+                          style={{ width: '100px', margin: '0 auto' }}
+                          min="0"
+                          step="0.01"
+                        />
+                      </td>
+                      <td className="text-center">
+                        <Form.Control
+                          type="number"
+                          value={item.received_quantity}
+                          onChange={(e) => handleQuantityChange(index, 'received_quantity', e.target.value)}
+                          style={{ width: '100px', margin: '0 auto' }}
+                          min="0"
+                          step="0.01"
+                        />
+                      </td>
+                      <td className="text-center">{item.unit}</td>
+                      <td className="text-end">{formatNumber(item.vendor_price)} ₽</td>
+                      <td className="text-end">{formatNumber(item.received_quantity * item.vendor_price)} ₽</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan="6" className="text-end"><strong>Итого:</strong></td>
+                    <td className="text-end"><strong>{formatNumber(calculateTotalAmount())} ₽</strong></td>
+                  </tr>
+                </tfoot>
+              </Table>
+
+              <Form.Group className="mb-3">
+                <Form.Label>Примечания к приёмке</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  rows={2}
+                  value={receiptNotes}
+                  onChange={(e) => setReceiptNotes(e.target.value)}
+                  placeholder="Дополнительная информация о приёмке..."
+                />
+              </Form.Group>
+
+              {discrepancies.length > 0 && (
+                <Alert variant="warning">
+                  <strong>Обнаружены расхождения:</strong>
+                  <ul className="mb-0 mt-2">
+                    {discrepancies.map((d, i) => (
+                      <li key={i}>{d.productName}</li>
+                    ))}
+                  </ul>
+                </Alert>
+              )}
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          {receiptStep === 2 && (
+            <Button variant="secondary" onClick={() => setReceiptStep(1)}>
+              Назад к договорам
+            </Button>
+          )}
+          <Button variant="secondary" onClick={handleCloseReceiveModal}>
+            Закрыть
+          </Button>
+          {receiptStep === 1 && (
+            <Button 
+              variant="primary" 
+              onClick={handleStartReceipt} 
+              disabled={!selectedContract}
+            >
+              Начать приёмку
+            </Button>
+          )}
+          {receiptStep === 2 && (
+            <Button 
+              variant="success" 
+              onClick={handleCompleteReceipt}
+              disabled={loading}
+            >
+              {loading ? 'Обработка...' : 'Завершить приёмку'}
+            </Button>
+          )}
+        </Modal.Footer>
+      </Modal>
+
+      {/* Модальное окно добавления товара */}
       <Modal show={showAddModal} onHide={() => setShowAddModal(false)} size="lg">
         <Modal.Header closeButton>
           <Modal.Title>Добавление товара</Modal.Title>
@@ -602,12 +1230,13 @@ function WarehousePage({ setError }) {
           <Button variant="secondary" onClick={() => setShowAddModal(false)}>
             Отмена
           </Button>
-          <Button variant="primary" onClick={handleAddProduct}>
-            Добавить
+          <Button variant="primary" onClick={handleAddProduct} disabled={loading}>
+            {loading ? 'Добавление...' : 'Добавить'}
           </Button>
         </Modal.Footer>
       </Modal>
 
+      {/* Модальное окно редактирования товара */}
       <Modal show={showEditModal} onHide={() => setShowEditModal(false)} size="lg">
         <Modal.Header closeButton>
           <Modal.Title>Редактирование товара</Modal.Title>
@@ -640,18 +1269,117 @@ function WarehousePage({ setError }) {
                 </Form.Group>
               </Col>
             </Row>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Описание</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={2}
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+              />
+            </Form.Group>
+
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Категория</Form.Label>
+                  <Form.Select
+                    name="category"
+                    value={formData.category}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value="">Выберите категорию</option>
+                    {categories.filter(c => c !== 'Все').map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Единица измерения</Form.Label>
+                  <Form.Select
+                    name="unit"
+                    value={formData.unit}
+                    onChange={handleInputChange}
+                  >
+                    <option value="шт">шт</option>
+                    <option value="м">м</option>
+                    <option value="кг">кг</option>
+                    <option value="уп">уп</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Цена (₽)</Form.Label>
+                  <Form.Control
+                    type="number"
+                    name="price"
+                    value={formData.price}
+                    onChange={handleInputChange}
+                    step="0.01"
+                    min="0"
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Текущий остаток</Form.Label>
+                  <Form.Control
+                    type="number"
+                    name="current_stock"
+                    value={formData.current_stock}
+                    onChange={handleInputChange}
+                    min="0"
+                    step="0.01"
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Минимальный запас</Form.Label>
+                  <Form.Control
+                    type="number"
+                    name="min_stock"
+                    value={formData.min_stock}
+                    onChange={handleInputChange}
+                    min="0"
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Расположение</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleInputChange}
+                    placeholder="A-01-01"
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
           </Form>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowEditModal(false)}>
             Отмена
           </Button>
-          <Button variant="primary" onClick={handleEditProduct}>
-            Сохранить
+          <Button variant="primary" onClick={handleEditProduct} disabled={loading}>
+            {loading ? 'Сохранение...' : 'Сохранить'}
           </Button>
         </Modal.Footer>
       </Modal>
 
+      {/* Модальное окно движения товара */}
       <Modal show={showStockModal} onHide={() => setShowStockModal(false)}>
         <Modal.Header closeButton>
           <Modal.Title>Движение товара</Modal.Title>
@@ -659,9 +1387,9 @@ function WarehousePage({ setError }) {
         <Modal.Body>
           {selectedProduct && (
             <div className="mb-3">
-              <strong>Товар:</strong> {selectedProduct.name} ({selectedProduct.article})
+              <strong>Товар:</strong> {selectedProduct.Name} ({selectedProduct.Article})
               <br />
-              <strong>Текущий остаток:</strong> {selectedProduct.current_stock} {selectedProduct.unit}
+              <strong>Текущий остаток:</strong> {selectedProduct.current_stock} {selectedProduct.Unit}
             </div>
           )}
           <Form>
@@ -674,7 +1402,6 @@ function WarehousePage({ setError }) {
               >
                 <option value="income">Приход</option>
                 <option value="outcome">Расход</option>
-                <option value="write-off">Списание</option>
               </Form.Select>
             </Form.Group>
 
@@ -691,7 +1418,7 @@ function WarehousePage({ setError }) {
             </Form.Group>
 
             <Form.Group className="mb-3">
-              <Form.Label>Причина/Основание</Form.Label>
+              <Form.Label>Основание</Form.Label>
               <Form.Control
                 type="text"
                 name="reason"
@@ -700,35 +1427,25 @@ function WarehousePage({ setError }) {
                 placeholder="Номер документа, причина..."
               />
             </Form.Group>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Документ</Form.Label>
-              <Form.Control
-                type="text"
-                name="document"
-                value={stockMovement.document}
-                onChange={handleStockMovementChange}
-                placeholder="Номер накладной/акта"
-              />
-            </Form.Group>
           </Form>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowStockModal(false)}>
             Отмена
           </Button>
-          <Button variant="primary" onClick={handleStockMovement}>
-            Провести
+          <Button variant="primary" onClick={handleStockMovement} disabled={loading}>
+            {loading ? 'Обработка...' : 'Провести'}
           </Button>
         </Modal.Footer>
       </Modal>
 
+      {/* Модальное окно удаления */}
       <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)}>
         <Modal.Header closeButton>
           <Modal.Title>Подтверждение удаления</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          ⚠️ Вы действительно хотите удалить товар "{selectedProduct?.name}"?
+          ⚠️ Вы действительно хотите удалить товар "{selectedProduct?.Name}"?
           <br />
           <small className="text-muted">Это действие нельзя отменить.</small>
         </Modal.Body>
