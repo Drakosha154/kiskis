@@ -65,10 +65,10 @@ type Vendor_Products struct {
 }
 
 type Documents struct {
-	ID           uint      `gorm:"primaryKey"`
-	Doc_number   string    `gorm:"not null"`
-	Doc_type     string    `gorm:"not null"`
-	Doc_date     time.Time `gorm:"not null"`
+	ID           uint   `gorm:"primaryKey"`
+	Doc_number   string `gorm:"not null"`
+	Doc_type     string `gorm:"not null"`
+	Doc_date     string `gorm:"not null"`
 	Vendor_id    int
 	User_id      uint
 	Status       string  `gorm:"default:Черновик"`
@@ -78,47 +78,34 @@ type Documents struct {
 	Created_at   time.Time
 }
 
-// ContractDistribution - распределение товаров по поставщикам в договоре
-type ContractDistribution struct {
-	ID          uint    `gorm:"primaryKey"`
-	DocumentID  int     `gorm:"not null;index"` // ID договора
-	ProductID   int     `gorm:"not null"`       // ID товара
-	VendorID    int     `gorm:"not null"`       // ID поставщика
-	Quantity    float64 `gorm:"not null"`       // Количество
-	Price       float64 `gorm:"not null"`       // Цена за единицу
-	Currency    string  `gorm:"default:RUB"`    // Валюта
-	TotalAmount float64 `gorm:"not null"`       // Общая сумма (quantity * price)
-	CreatedAt   time.Time
-}
-
 type Document_Items struct {
-	ID          uint    `gorm:"primaryKey"`
-	document_id int     `gorm:"not null"`
-	product_id  int     `gorm:"not null"`
-	quantity    float64 `gorm:"not null"`
-	price       float64 `gorm:"not null"`
-	amount      float64
-	vat_rate    float64 `gorm:"default:0"`
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	DocumentID int       `gorm:"not null;column:document_id" json:"document_id"`
+	ProductID  int       `gorm:"not null;column:product_id" json:"product_id"`
+	Quantity   float64   `gorm:"not null" json:"quantity"`
+	Price      float64   `gorm:"not null" json:"price"`
+	VatRate    float64   `gorm:"default:0;column:vat_rate" json:"vat_rate"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type Accounting struct {
 	ID             uint      `gorm:"primaryKey"`
-	operation_date time.Time `gorm:"not null"`
-	operation_type string    `gorm:"not null"`
-	document_id    int       `gorm:"not null"`
-	supplier_id    int
-	amount         float64 `gorm:"not null"`
-	vat_amount     float64 `gorm:"default:0"`
-	description    string
-	created_by     int
-	created_at     time.Time
+	Operation_date time.Time `gorm:"not null"`
+	Operation_type string    `gorm:"not null"`
+	Document_id    int       `gorm:"not null"`
+	Supplier_id    int
+	Amount         float64 `gorm:"not null"`
+	Vat_amount     float64 `gorm:"default:0"`
+	Description    string
+	Created_by     int
+	Created_at     time.Time
 }
 
 type Storage struct {
 	ID                       uint    `gorm:"primaryKey"`
-	product_id               int     `gorm:"not null"`
-	quantity                 float64 `gorm:"not null;default:0"`
-	last_receipt_date        time.Time
-	last_receipt_document_id int
-	updated_at               time.Time
+	Product_id               int     `gorm:"not null"`
+	Quantity                 float64 `gorm:"not null;default:0"`
+	Last_receipt_date        time.Time
+	Last_receipt_document_id int
+	Updated_at               time.Time
 }

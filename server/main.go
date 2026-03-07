@@ -87,6 +87,18 @@ func main() {
 		authGroup.GET("/vendor-products_for_contract/:id", routes.GetVendorProductForContract)
 		authGroup.DELETE("/vendor-products/:id", routes.DelVendorProductByID)
 
+		//Товар Документы
+		authGroup.POST("/document-products", routes.NewDocumentProduct)
+		authGroup.GET("/document-products/:id", routes.GetDocumentProducts)
+		authGroup.POST("/document-products/multiple", routes.GetMultipleDocumentsProducts)
+		authGroup.PATCH("/document-products/item/:item_id", routes.UpdateDocumentProduct)
+		authGroup.DELETE("/document-products/item/:item_id", routes.DeleteDocumentProduct)
+
+		// Склад
+		authGroup.GET("/storage", routes.GetStorage)
+		authGroup.GET("/storage/:product_id", routes.GetProductStorage)
+		authGroup.POST("/storage/update", routes.UpdateStorage)
+		authGroup.POST("/storage/bulk-update", routes.BulkUpdateStorage)
 
 		// adminGroup := authGroup.Group("/admin")
 		// adminGroup.Use(routes.AdminMiddleware())

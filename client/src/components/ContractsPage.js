@@ -78,7 +78,6 @@ function NewContractPage({ setError }) {
     // Загружаем поставщиков для этого товара
     const vendorsForProduct = await fetchVendorsForProduct(productId);
 
-    console.log(vendorsForProduct)
     
     // Преобразуем данные из API в нужный формат
     const formattedVendors = vendorsForProduct.map(vp => ({
@@ -169,7 +168,7 @@ function NewContractPage({ setError }) {
     return item?.availableVendors || [];
   };
 
-  const handleSubmit = async () => {
+const handleSubmit = async () => {
   // Проверка заполненности
   for (const item of contractItems) {
     if (item.total_allocated < item.required_quantity) {
@@ -194,14 +193,11 @@ function NewContractPage({ setError }) {
         };
       }
       
-      // Добавляем товар для этого поставщика
       vendorGroups[vendor.vendor_id].items.push({
         product_id: item.product_id,
-        product_name: item.product_name,
         quantity: vendor.quantity,
         price: vendor.price,
-        unit: item.unit,
-        amount: vendor.quantity * vendor.price
+        vat_rate: 0
       });
       
       vendorGroups[vendor.vendor_id].total_amount += vendor.quantity * vendor.price;
@@ -212,24 +208,28 @@ function NewContractPage({ setError }) {
     setLoading(true);
     const createdContracts = [];
 
-    // Создаем отдельный договор для каждого поставщика
     for (const vendorId in vendorGroups) {
       const vendorGroup = vendorGroups[vendorId];
       
-      // Формируем описание с детализацией товаров
-      const itemsDescription = vendorGroup.items.map(item => 
-        `- ${item.product_name}: ${item.quantity} ${item.unit} × ${item.price}₽ = ${item.amount}₽`
-      ).join('\n');
+      // Формируем описание
+      const itemsDescription = contractItems
+        .filter(item => item.vendors.some(v => v.vendor_id === vendorGroup.vendor_id))
+        .map(item => {
+          const vendorItem = item.vendors.find(v => v.vendor_id === vendorGroup.vendor_id);
+          return `- ${item.product_name}: ${vendorItem.quantity} ${item.unit} × ${vendorItem.price}₽ = ${vendorItem.quantity * vendorItem.price}₽`;
+        }).join('\n');
 
       const documentData = {
-        doc_number: `${contractData.doc_number}-${vendorGroup.vendor_id}`, // Добавляем суффикс с ID поставщика
+        doc_number: `${contractData.doc_number}-${vendorGroup.vendor_id}`,
         doc_type: 'Договор',
+        doc_date: contractData.delivery_date,
         vendor_id: vendorGroup.vendor_id,
         status: 'Черновик',
         total_amount: vendorGroup.total_amount,
         description: `Поставщик: ${vendorGroup.vendor_name}\n\nСостав поставки:\n${itemsDescription}\n\n---\nАдрес доставки: ${contractData.delivery_address}\nУсловия оплаты: ${getPaymentTermsText(contractData.payment_terms)}\nДата доставки: ${contractData.delivery_date}\n${contractData.description}`,
       };
 
+      // 1. Создаем документ
       const docResponse = await fetch('http://localhost:8080/api/documents', {
         method: 'POST',
         headers: {
@@ -245,14 +245,51 @@ function NewContractPage({ setError }) {
       }
       
       const docResult = await docResponse.json();
+      
+      // Получаем ID созданного документа из ответа
+      // Предполагаем, что сервер возвращает id в ответе
+      const documentId = docResult.id;
+      
+      if (!documentId) {
+        throw new Error('Не удалось получить ID созданного документа');
+      }
+
+      // 2. Создаем товары для документа
+      const documentItemsData = {
+        document_id: documentId,
+        items: vendorGroup.items.map(item => ({
+          document_id: documentId,
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price: item.price,
+          vat_rate: item.vat_rate || 0
+        }))
+      };
+
+      const itemsResponse = await fetch('http://localhost:8080/api/document-products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(documentItemsData)
+      });
+
+      if (!itemsResponse.ok) {
+        const errorData = await itemsResponse.json();
+        throw new Error(errorData.error || 'Failed to create document items');
+      }
+
       createdContracts.push({
         ...docResult,
+        document_id: documentId,
         vendor_name: vendorGroup.vendor_name,
         items: vendorGroup.items
       });
     }
     
     alert(`Создано договоров: ${createdContracts.length}`);
+    
   } catch (err) {
     setError('Ошибка создания договора: ' + err.message);
     console.error('Submission error:', err);

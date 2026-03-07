@@ -85,31 +85,64 @@ function WarehousePage({ setError }) {
   }, [products, searchTerm, categoryFilter, stockFilter, sortConfig]);
 
   const fetchProducts = async () => {
-    setLoading(true);
-    const token = localStorage.getItem('token');
-    try {
-      const response = await fetch('http://localhost:8080/api/products', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (!response.ok) throw new Error('Failed to fetch products');
-      const data = await response.json();
-      
-      // Добавляем поля current_stock и price, так как в БД их может не быть
-      const productsWithStock = (data.products || []).map(p => ({
-        ...p,
-        current_stock: p.current_stock || 0,
-        price: p.price || 0,
-        location: p.location || 'Не указано'
-      }));
-      
-      setProducts(productsWithStock);
-    } catch (error) {
-      setError('Ошибка загрузки данных склада');
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  const token = localStorage.getItem('token');
+  try {
+    // Загружаем товары
+    const productsResponse = await fetch('http://localhost:8080/api/products', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!productsResponse.ok) throw new Error('Failed to fetch products');
+    const productsData = await productsResponse.json();
+    
+    // Загружаем остатки со склада
+    const storageResponse = await fetch('http://localhost:8080/api/storage', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!storageResponse.ok) {
+      console.error('Storage response error:', await storageResponse.text());
+      throw new Error('Failed to fetch storage');
     }
-  };
+    const storageData = await storageResponse.json();
+    
+    
+    // Создаем мапу для быстрого доступа к остаткам
+    const storageMap = {};
+    if (storageData.storage && Array.isArray(storageData.storage)) {
+      storageData.storage.forEach(item => {
+        // Проверяем, какое имя поля приходит от сервера
+        const productId = item.product_id || item.Product_id || item.ID;
+        if (productId) {
+          storageMap[productId] = item.quantity || item.Quantity || 0;
+        }
+      });
+    }
+    
+    
+    // Объединяем данные
+    const productsWithStock = (productsData.products || []).map(p => ({
+      ...p,
+      ID: p.ID,
+      Article: p.Article,
+      Name: p.Name,
+      Description: p.Description,
+      Category: p.Category,
+      Unit: p.Unit,
+      min_stock: p.Min_stock || 0,
+      current_stock: storageMap[p.ID] || 0, // Берем из storage
+      price: p.price || 0,
+      location: p.location || 'Не указано'
+    }));
+    setProducts(productsWithStock);
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    setError('Ошибка загрузки данных склада: ' + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fetchContracts = async () => {
     const token = localStorage.getItem('token');
@@ -129,6 +162,37 @@ function WarehousePage({ setError }) {
     }
   };
 
+  const fetchDocumentProducts = async (documentId) => {
+  const token = localStorage.getItem('token');
+  try {
+    const response = await fetch(`http://localhost:8080/api/document-products/${documentId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!response.ok) throw new Error('Failed to fetch document products');
+    const data = await response.json();
+    
+    // Преобразуем данные для отображения
+    // Все данные о продукте (name, sku, unit) уже приходят из JOIN запроса
+    const products = (data.items || []).map(item => ({
+      id: item.id,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      product_article: item.product_article,
+      vendor_price: item.price,
+      quantity: item.quantity,
+      unit: item.unit,
+      expected_quantity: item.quantity, // По умолчанию ожидаем столько, сколько в договоре
+      received_quantity: 0
+    }));
+    
+    return products;
+  } catch (error) {
+    setError('Ошибка загрузки товаров документа');
+    return [];
+  }
+};
+
   const fetchContractProducts = async (vendorId) => {
     const token = localStorage.getItem('token');
     try {
@@ -139,7 +203,6 @@ function WarehousePage({ setError }) {
       if (!response.ok) throw new Error('Failed to fetch vendor products');
       const data = await response.json();
 
-      console.log(data)
       
       // Преобразуем данные для отображения
       const products = (data.vendorProducts || []).map(vp => ({
@@ -155,7 +218,6 @@ function WarehousePage({ setError }) {
         unit: 'шт'
       }));
 
-      console.log(products)
       
       setContractProducts(products);
     } catch (error) {
@@ -199,11 +261,15 @@ function WarehousePage({ setError }) {
     setFilteredProducts(result);
   };
 
-  const handleSelectContract = (contract) => {
-    setSelectedContract(contract);
-    fetchContractProducts(contract.Vendor_id);
-    setActiveTab('products');
-  };
+const handleSelectContract = async (contract) => {
+  setSelectedContract(contract);
+  
+  // Загружаем товары из document_items
+  const products = await fetchDocumentProducts(contract.ID);
+  setContractProducts(products);
+  
+  setActiveTab('products');
+};
 
   const handleStartReceipt = () => {
     if (!selectedContract) return;
@@ -239,127 +305,129 @@ function WarehousePage({ setError }) {
     setReceivedItems(updated);
   };
 
-  const handleCompleteReceipt = async () => {
-    const token = localStorage.getItem('token');
+ const handleCompleteReceipt = async () => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    setLoading(true);
     
-    try {
-      setLoading(true);
-      
-      // 1. Создаём документ прихода
-      const receiptDoc = {
-        doc_number: `PR-${Date.now()}`,
-        doc_type: 'Приход',
-        vendor_id: selectedContract.Vendor_id,
-        status: discrepancies.length > 0 ? 'Расхождение' : 'Завершён',
-        total_amount: calculateTotalAmount(),
-        description: `Приход товаров по договору ${selectedContract.Doc_number}\n${receiptNotes}`
+    // 1. Создаём документ прихода
+    const receiptDoc = {
+      doc_number: `PR-${Date.now()}`,
+      doc_type: 'Приход',
+      vendor_id: selectedContract.Vendor_id,
+      status: discrepancies.length > 0 ? 'Расхождение' : 'Завершён',
+      total_amount: calculateTotalAmount(),
+      description: `Приход товаров по договору ${selectedContract.Doc_number}\n${receiptNotes}`
+    };
+
+    const docResponse = await fetch('http://localhost:8080/api/documents', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(receiptDoc)
+    });
+
+    if (!docResponse.ok) {
+      const errorData = await docResponse.json();
+      throw new Error(errorData.error || 'Failed to create receipt document');
+    }
+    
+    const docResult = await docResponse.json();
+    setReceiptDocument(docResult);
+
+    // 2. Подготавливаем данные для массового обновления склада
+    const itemsToUpdate = receivedItems.filter(item => item.received_quantity > 0);
+    
+    if (itemsToUpdate.length > 0) {
+      const bulkUpdateData = {
+        items: itemsToUpdate.map(item => ({
+          product_id: item.product_id,
+          quantity: item.received_quantity,
+          price: item.vendor_price || 0
+        })),
+        document_id: docResult.id,
+        document_type: 'Приход',
+        vendor_id: selectedContract.Vendor_id
       };
 
-      const docResponse = await fetch('http://localhost:8080/api/documents', {
+      // 3. Обновляем остатки на складе (mass update)
+      const storageResponse = await fetch('http://localhost:8080/api/storage/bulk-update', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(receiptDoc)
+        body: JSON.stringify(bulkUpdateData)
       });
 
-      if (!docResponse.ok) {
-        const errorData = await docResponse.json();
-        throw new Error(errorData.error || 'Failed to create receipt document');
-      }
-      
-      const docResult = await docResponse.json();
-      setReceiptDocument(docResult);
-
-      // 2. Обновляем остатки на складе для каждого товара
-      for (const item of receivedItems) {
-        if (item.received_quantity > 0) {
-          // Находим товар в списке продуктов
-          const product = products.find(p => p.ID === item.product_id);
-          
-          if (product) {
-            // Обновляем товар с новым количеством
-            const updatedProduct = {
-              ...product,
-              current_stock: (product.current_stock || 0) + item.received_quantity,
-              price: item.vendor_price || product.price // Обновляем цену если нужно
-            };
-
-            await fetch(`http://localhost:8080/api/products/${item.product_id}`, {
-              method: 'PATCH',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                article: product.Article,
-                name: product.Name,
-                description: product.Description,
-                unit: product.Unit,
-                category: product.Category,
-                min_stock: product.min_stock,
-                current_stock: (product.current_stock || 0) + item.received_quantity,
-                price: item.vendor_price || product.price,
-                location: product.location || 'Не указано'
-              })
-            });
-          }
+      if (!storageResponse.ok) {
+        const errorText = await storageResponse.text();
+        console.error('Storage update error:', errorText);
+        let errorMessage = 'Failed to update storage';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          // Ignore parsing error
         }
+        throw new Error(errorMessage);
       }
 
-      // 3. Если есть расхождения, обновляем статус договора
-      if (discrepancies.length > 0) {
-        await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            doc_number: selectedContract.Doc_number,
-            doc_type: selectedContract.Doc_type,
-            vendor_id: selectedContract.Vendor_id,
-            status: 'Частично исполнен',
-            total_amount: selectedContract.Total_amount,
-            description: `${selectedContract.Description}\n\nОбнаружены расхождения при приёмке: ${discrepancies.map(d => d.productName).join(', ')}`
-          })
-        });
-      } else {
-        // Если расхождений нет, завершаем договор
-        await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            doc_number: selectedContract.Doc_number,
-            doc_type: selectedContract.Doc_type,
-            vendor_id: selectedContract.Vendor_id,
-            status: 'Исполнен',
-            total_amount: selectedContract.Total_amount,
-            description: selectedContract.Description
-          })
-        });
-      }
-
-      // 4. Обновляем данные
-      await fetchProducts();
-      await fetchContracts();
-      
-      // Показываем сообщение об успехе
-      alert(`Приёмка завершена. Создан документ: ${receiptDoc.doc_number}`);
-      
-      // Закрываем модальное окно
-      handleCloseReceiveModal();
-      
-    } catch (error) {
-      setError('Ошибка при оформлении приёмки: ' + error.message);
-    } finally {
-      setLoading(false);
+      const storageResult = await storageResponse.json();
     }
-  };
+
+    // 4. Если есть расхождения, обновляем статус договора
+    if (discrepancies.length > 0) {
+      await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          doc_number: selectedContract.Doc_number,
+          doc_type: selectedContract.Doc_type,
+          vendor_id: selectedContract.Vendor_id,
+          status: 'Частично исполнен',
+          total_amount: selectedContract.Total_amount,
+          description: `${selectedContract.Description}\n\nОбнаружены расхождения при приёмке: ${discrepancies.map(d => d.productName).join(', ')}`
+        })
+      });
+    } else {
+      await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          doc_number: selectedContract.Doc_number,
+          doc_type: selectedContract.Doc_type,
+          vendor_id: selectedContract.Vendor_id,
+          status: 'Исполнен',
+          total_amount: selectedContract.Total_amount,
+          description: selectedContract.Description
+        })
+      });
+    }
+
+    // 5. Обновляем данные на странице
+    await fetchProducts();
+    await fetchContracts();
+    
+    alert(`Приёмка завершена. Создан документ: ${receiptDoc.doc_number}`);
+    handleCloseReceiveModal();
+    
+  } catch (error) {
+    console.error('Receipt error:', error);
+    setError('Ошибка при оформлении приёмки: ' + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleCloseReceiveModal = () => {
     setShowReceiveModal(false);
@@ -490,70 +558,78 @@ function WarehousePage({ setError }) {
     }
   };
 
-  const handleStockMovement = async () => {
-    const token = localStorage.getItem('token');
-    try {
-      setLoading(true);
-      
-      // Обновляем количество товара
-      const product = selectedProduct;
-      const newStock = stockMovement.type === 'income' 
-        ? (product.current_stock + stockMovement.quantity)
-        : (product.current_stock - stockMovement.quantity);
+const handleStockMovement = async () => {
+  const token = localStorage.getItem('token');
+  try {
+    setLoading(true);
+    
+    // Создаём документ движения
+    const movementDoc = {
+      doc_number: `MOV-${Date.now()}`,
+      doc_type: stockMovement.type === 'income' ? 'Приход' : 'Расход',
+      vendor_id: 0,
+      status: 'Завершён',
+      total_amount: stockMovement.quantity * (selectedProduct.price || 0),
+      description: `${stockMovement.type === 'income' ? 'Приход' : 'Расход'}: ${stockMovement.quantity} ${selectedProduct.Unit}. ${stockMovement.reason}`
+    };
 
-      if (newStock < 0) {
-        throw new Error('Недостаточно товара на складе');
-      }
+    const docResponse = await fetch('http://localhost:8080/api/documents', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(movementDoc)
+    });
 
-      const productData = {
-        article: product.Article,
-        name: product.Name,
-        description: product.Description,
-        unit: product.Unit,
-        category: product.Category,
-        min_stock: product.min_stock,
-        current_stock: newStock,
-        price: product.price,
-        location: product.location
-      };
-
-      await fetch(`http://localhost:8080/api/products/${product.ID}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(productData)
-      });
-
-      // Создаём документ движения
-      const movementDoc = {
-        doc_number: `MOV-${Date.now()}`,
-        doc_type: stockMovement.type === 'income' ? 'Приход' : 'Расход',
-        vendor_id: 0, // Для ручного движения можно не указывать
-        status: 'Завершён',
-        total_amount: stockMovement.quantity * (product.price || 0),
-        description: `${stockMovement.type === 'income' ? 'Приход' : 'Расход'}: ${stockMovement.quantity} ${product.Unit}. ${stockMovement.reason}`
-      };
-
-      await fetch('http://localhost:8080/api/documents', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(movementDoc)
-      });
-
-      await fetchProducts();
-      setShowStockModal(false);
-      
-    } catch (error) {
-      setError('Ошибка при движении товара: ' + error.message);
-    } finally {
-      setLoading(false);
+    if (!docResponse.ok) {
+      const errorData = await docResponse.json();
+      throw new Error(errorData.error || 'Failed to create movement document');
     }
-  };
+
+    const docResult = await docResponse.json();
+
+    // Обновляем остаток на складе
+    const storageUpdateData = {
+      product_id: selectedProduct.ID,
+      quantity: stockMovement.quantity,
+      operation: stockMovement.type,
+      document_id: docResult.id,
+      document_type: stockMovement.type === 'income' ? 'Приход' : 'Расход'
+    };
+
+    const storageResponse = await fetch('http://localhost:8080/api/storage/update', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(storageUpdateData)
+    });
+
+    if (!storageResponse.ok) {
+      const errorText = await storageResponse.text();
+      console.error('Storage update error:', errorText);
+      let errorMessage = 'Failed to update storage';
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.error || errorMessage;
+      } catch (e) {
+        // Ignore parsing error
+      }
+      throw new Error(errorMessage);
+    }
+
+    await fetchProducts();
+    setShowStockModal(false);
+    
+  } catch (error) {
+    console.error('Stock movement error:', error);
+    setError('Ошибка при движении товара: ' + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const resetForm = () => {
     setFormData({
@@ -710,10 +786,6 @@ function WarehousePage({ setError }) {
                 <th>Наименование</th>
                 <th>Категория</th>
                 <th className="text-center">Остаток</th>
-                <th className="text-center">Мин. запас</th>
-                <th className="text-end">Цена</th>
-                <th className="text-end">Сумма</th>
-                <th>Расположение</th>
                 <th>Статус</th>
                 <th>Действия</th>
               </tr>
@@ -729,14 +801,6 @@ function WarehousePage({ setError }) {
                     <td className="text-center">
                       {formatNumber(product.current_stock)} {product.Unit}
                     </td>
-                    <td className="text-center">
-                      {product.min_stock} {product.Unit}
-                    </td>
-                    <td className="text-end">{formatNumber(product.price)} ₽</td>
-                    <td className="text-end">
-                      {formatNumber(product.current_stock * product.price)} ₽
-                    </td>
-                    <td>{product.location || 'Не указано'}</td>
                     <td>
                       <Badge bg={status.variant}>
                         {status.text}
@@ -849,7 +913,7 @@ function WarehousePage({ setError }) {
                   <tr key={contract.ID}>
                     <td><strong>{contract.Doc_number}</strong></td>
                     <td>{contract.vendor_name}</td>
-                    <td>{new Date(contract.Doc_date).toLocaleDateString()}</td>
+                    <td>{new Date(contract.Created_at).toLocaleDateString()}</td>
                     <td>{formatNumber(contract.Total_amount)} ₽</td>
                     <td>
                       <Badge bg={contract.Status === 'Черновик' ? 'secondary' : 'success'}>
@@ -909,7 +973,7 @@ function WarehousePage({ setError }) {
                         <th>Товар</th>
                         <th>Артикул</th>
                         <th className="text-center">Цена</th>
-                        <th className="text-center">Срок доставки</th>
+                        <th className="text-center">Дата доставки</th>
                         <th className="text-center">Валюта</th>
                       </tr>
                     </thead>
@@ -920,8 +984,8 @@ function WarehousePage({ setError }) {
                           <td>{product.product_name}</td>
                           <td>{product.product_article}</td>
                           <td className="text-center">{formatNumber(product.vendor_price)}</td>
-                          <td className="text-center">{product.delivery_days} дн.</td>
-                          <td className="text-center">{product.currency}</td>
+                          <td className="text-center">{selectedContract.Doc_date}</td>
+                          <td className="text-center">{selectedContract.Currency}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -969,12 +1033,9 @@ function WarehousePage({ setError }) {
         </Tab>
       </Tabs>
     )}
-          {console.log(receiptStep)}
-          {console.log(selectedContract)}
           {receiptStep === 2 && selectedContract && (
             <div>
               <Alert variant="info">
-                {console.log(selectedContract)}
                 <Row>
                   <Col>
                     <strong>Договор:</strong> {selectedContract.Doc_number}
