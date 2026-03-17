@@ -100,6 +100,11 @@ func main() {
 		authGroup.POST("/storage/update", routes.UpdateStorage)
 		authGroup.POST("/storage/bulk-update", routes.BulkUpdateStorage)
 
+		//Бухгалтерия
+		authGroup.GET("/money", routes.GetMoney)
+		authGroup.GET("/accounting/operations", routes.GetAccountingOperations)
+		authGroup.GET("/accounting/summary", routes.GetAccountingSummary)
+
 		// adminGroup := authGroup.Group("/admin")
 		// adminGroup.Use(routes.AdminMiddleware())
 		// 	{

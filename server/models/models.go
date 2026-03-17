@@ -109,3 +109,7 @@ type Storage struct {
 	Last_receipt_document_id int
 	Updated_at               time.Time
 }
+
+type Money struct {
+	Money float64
+}

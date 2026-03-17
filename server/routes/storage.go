@@ -75,7 +75,7 @@ func UpdateStorage(c *gin.Context) {
 	var input struct {
 		Product_id   int     `json:"product_id" binding:"required"`
 		Quantity     float64 `json:"quantity" binding:"required"`
-		Operation    string  `json:"operation" binding:"required,oneof=income outcome writeoff"`
+		Operation    string  `json:"operation" binding:"required,oneof=income expense writeoff"`
 		Document_id  int     `json:"document_id"`
 		DocumentType string  `json:"document_type"`
 	}
@@ -100,12 +100,14 @@ func UpdateStorage(c *gin.Context) {
 		}
 	}
 
+	var operat = "income"
+
 	// Обновляем количество
 	oldQuantity := storage.Quantity
 	switch input.Operation {
 	case "income":
 		storage.Quantity += input.Quantity
-	case "outcome", "writeoff":
+	case "expense", "writeoff":
 		if storage.Quantity < input.Quantity {
 			tx.Rollback()
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -121,6 +123,7 @@ func UpdateStorage(c *gin.Context) {
 
 	// Если это приход, обновляем дату последнего поступления
 	if input.Operation == "income" {
+		operat = "expense"
 		storage.Last_receipt_date = time.Now()
 		storage.Last_receipt_document_id = input.Document_id
 	}
@@ -147,7 +150,7 @@ func UpdateStorage(c *gin.Context) {
 	// Создаем запись в accounting (для бухгалтерии)
 	accounting := models.Accounting{
 		Operation_date: time.Now(),
-		Operation_type: input.Operation,
+		Operation_type: operat,
 		Document_id:    input.Document_id,
 		Supplier_id:    0,              // Нужно получить из документа
 		Amount:         input.Quantity, // Здесь должна быть сумма, нужно получать цену
@@ -189,6 +192,32 @@ func BulkUpdateStorage(c *gin.Context) {
 
 	// Начинаем транзакцию
 	tx := database.DB.Begin()
+	
+	// Считаем общую сумму закупки
+	var totalAmount float64
+	for _, item := range input.Items {
+		totalAmount += item.Quantity * item.Price
+	}
+
+	// Проверяем достаточно ли средств
+	var money models.Money
+	if err := tx.First(&money).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch money data"})
+		return
+	}
+
+	if money.Money < totalAmount {
+		tx.Rollback()
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":        "Insufficient funds",
+			"available":    money.Money,
+			"required":     totalAmount,
+			"shortage":     totalAmount - money.Money,
+		})
+		return
+	}
+
 	results := make([]map[string]interface{}, 0)
 
 	for _, item := range input.Items {
@@ -202,7 +231,12 @@ func BulkUpdateStorage(c *gin.Context) {
 			storage.Last_receipt_date = time.Now()
 			storage.Last_receipt_document_id = input.Document_id
 			storage.Updated_at = time.Now()
-			tx.Save(&storage)
+			
+			if err := tx.Save(&storage).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update storage"})
+				return
+			}
 		} else {
 			// Создаем новую запись
 			storage = models.Storage{
@@ -212,13 +246,17 @@ func BulkUpdateStorage(c *gin.Context) {
 				Last_receipt_document_id: input.Document_id,
 				Updated_at:               time.Now(),
 			}
-			tx.Create(&storage)
+			if err := tx.Create(&storage).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create storage record"})
+				return
+			}
 		}
 
 		// Создаем запись в accounting
 		accounting := models.Accounting{
 			Operation_date: time.Now(),
-			Operation_type: "income",
+			Operation_type: "expense",
 			Document_id:    input.Document_id,
 			Supplier_id:    input.VendorID,
 			Amount:         item.Quantity * item.Price,
@@ -226,20 +264,39 @@ func BulkUpdateStorage(c *gin.Context) {
 			Created_by:     int(c.MustGet("userID").(uint)),
 			Created_at:     time.Now(),
 		}
-		tx.Create(&accounting)
+		
+		if err := tx.Create(&accounting).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create accounting record"})
+			return
+		}
 
 		results = append(results, map[string]interface{}{
 			"product_id":   item.Product_id,
 			"old_quantity": oldQuantity,
 			"new_quantity": storage.Quantity,
 			"added":        item.Quantity,
+			"cost":         item.Quantity * item.Price,
 		})
 	}
 
-	tx.Commit()
+	// Обновляем таблицу money (вычитаем общую сумму)
+	if err := tx.Model(&models.Money{}).Where("1 = 1").Update("money", money.Money - totalAmount).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update money"})
+		return
+	}
+
+	// Фиксируем транзакцию
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Bulk storage update completed",
-		"results": results,
+		"message":      "Bulk storage update completed",
+		"results":      results,
+		"total_amount": totalAmount,
+		"money_left":   money.Money - totalAmount,
 	})
 }

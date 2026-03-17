@@ -418,6 +418,10 @@ const handleSelectContract = async (contract) => {
     await fetchProducts();
     await fetchContracts();
     
+    // 6. ОБНОВЛЯЕМ БАЛАНС В НАВБАРЕ
+    // Вызываем событие для обновления баланса
+    window.dispatchEvent(new CustomEvent('balanceUpdate'));
+    
     alert(`Приёмка завершена. Создан документ: ${receiptDoc.doc_number}`);
     handleCloseReceiveModal();
     
@@ -686,7 +690,7 @@ const handleStockMovement = async () => {
       </Row>
 
       <Row className="mb-3">
-        <Col md={3}>
+        <Col md={4}>
           <Card bg="light" className="text-center">
             <Card.Body>
               <h6>Всего товаров</h6>
@@ -694,7 +698,7 @@ const handleStockMovement = async () => {
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
+        <Col md={4}>
           <Card bg="light" className="text-center">
             <Card.Body>
               <h6>Товаров с низким запасом</h6>
@@ -704,22 +708,12 @@ const handleStockMovement = async () => {
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
+        <Col md={4}>
           <Card bg="light" className="text-center">
             <Card.Body>
               <h6>Нет в наличии</h6>
               <h3 className="text-danger">
                 {products.filter(p => p.current_stock === 0).length}
-              </h3>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={3}>
-          <Card bg="light" className="text-center">
-            <Card.Body>
-              <h6>Общая стоимость</h6>
-              <h3>
-                {formatNumber(products.reduce((sum, p) => sum + (p.current_stock * p.price), 0))} ₽
               </h3>
             </Card.Body>
           </Card>

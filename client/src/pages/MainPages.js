@@ -10,9 +10,14 @@ import ReportsPage from '../components/ReportsPage';
 function MainPage() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
-  const [activePage, setActivePage] = useState('suppliers'); // Активная страница по умолчанию
+  const [activePage, setActivePage] = useState('suppliers');
+  
+  // Функция для обновления баланса (будет передана в Navbar)
+  const refreshBalance = () => {
+    // Эта функция будет вызывать fetchMoney в Navbar
+    window.dispatchEvent(new CustomEvent('balanceUpdate'));
+  };
 
-  // Проверка авторизации при загрузке
   React.useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -20,7 +25,6 @@ function MainPage() {
     }
   }, [navigate]);
 
-  // Функция для отображения активной страницы
   const renderActivePage = () => {
     switch (activePage) {
       case 'suppliers':
@@ -28,7 +32,7 @@ function MainPage() {
       case 'contracts':
         return <ContractsPage setError={setError} />;
       case 'warehouse':
-        return <WarehousePage setError={setError} />;
+        return <WarehousePage setError={setError} onBalanceUpdate={refreshBalance} />;
       case 'documents':
         return <DocumentsPage setError={setError} />;
       case 'reports':
@@ -47,7 +51,7 @@ function MainPage() {
         {renderActivePage()}
       </div>
 
-      {/* Кнопки навигации внизу по центру */}
+      {/* Кнопки навигации */}
       <div className='container border border-3 border-black rounded-5 text-bg-secondary' style={{ minWidth: '1200px', minHeight: '100px', position: 'relative', marginTop: '50px'}}>
         <div className="d-flex justify-content-evenly m-3 align-self-stretch">
           <button 

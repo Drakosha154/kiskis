@@ -28,7 +28,6 @@ function DocumentsPage({ setError }) {
       }
 
       const data = await response.json();
-      console.log(data)
       setDocuments(data.documents || []);
     } catch (err) {
       console.error('Ошибка загрузки документов:', err);
@@ -125,12 +124,10 @@ function DocumentsPage({ setError }) {
                   </td>
                   <td>{doc.Doc_type}</td>
                   <td>
-                    <i className="bi bi-building me-1 text-muted"></i>
                     {doc.vendor_name}
                   </td>
                   <td>
-                    <i className="bi bi-calendar me-1 text-muted"></i>
-                    {formatDate(doc.Doc_date)}
+                    {formatDate(doc.Created_at)}
                   </td>
                   <td>
                       {doc.Status}
@@ -193,7 +190,6 @@ function DocumentsPage({ setError }) {
                           <strong>Дата создания:</strong>
                         </p>
                         <p>
-                          <i className="bi bi-calendar me-2 text-muted"></i>
                           {formatDateTime(selectedDocument.Created_at)}
                         </p>
                       </div>
@@ -203,7 +199,7 @@ function DocumentsPage({ setError }) {
                         </p>
                         <p>
                           <i className="bi bi-clock me-2 text-muted"></i>
-                          {formatDate(selectedDocument.Doc_date)}
+                          {formatDate(selectedDocument.Created_at)}
                         </p>
                       </div>
                     </div>
@@ -247,7 +243,6 @@ function DocumentsPage({ setError }) {
                           <strong>Сумма договора:</strong>
                         </p>
                         <p className="text-success h4">
-                          <i className="bi bi-currency-dollar me-1"></i>
                           {formatAmount(selectedDocument.Total_amount)}
                         </p>
                       </div>
