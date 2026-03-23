@@ -1,366 +1,433 @@
 import React from 'react';
 import {
-  Document, Page, Text, View, StyleSheet, Font
+  Document,
+  Page,
+  Text,
+  View,
+  StyleSheet,
+  Font,
+  Image,
 } from '@react-pdf/renderer';
 
-// Шрифт с поддержкой кириллицы (Roboto из CDN pdfmake)
+// ── Регистрация шрифта с поддержкой кириллицы ──────────────────────────────
 Font.register({
   family: 'Roboto',
   fonts: [
     {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/fonts/Roboto/Roboto-Regular.ttf',
-      fontWeight: 'normal',
+      src: 'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxP.ttf',
+      fontWeight: 400,
     },
     {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/fonts/Roboto/Roboto-Bold.ttf',
-      fontWeight: 'bold',
+      src: 'https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmWUlfBBc9.ttf',
+      fontWeight: 700,
+    },
+    {
+      src: 'https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmEU9fBBc9.ttf',
+      fontWeight: 300,
     },
   ],
 });
 
-const BLUE = '#003366';
-const BLACK = '#000000';
-const GRAY = '#808080';
-const LIGHT_GRAY = '#f5f5f5';
-const WHITE = '#ffffff';
-
-const s = StyleSheet.create({
+// ── Стили ───────────────────────────────────────────────────────────────────
+const styles = StyleSheet.create({
   page: {
     fontFamily: 'Roboto',
     fontSize: 10,
-    paddingTop: 25,
-    paddingBottom: 30,
-    paddingHorizontal: 25,
-    color: BLACK,
+    paddingTop: 40,
+    paddingBottom: 60,
+    paddingHorizontal: 40,
+    color: '#1a1a2e',
+    backgroundColor: '#ffffff',
   },
 
-  // ─── Шапка ───────────────────────────────────────────
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: WHITE,
-    textAlign: 'center',
+  // Шапка
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: '#2563eb',
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  companyName: {
+    fontSize: 14,
+    fontWeight: 700,
+    color: '#2563eb',
     marginBottom: 4,
   },
-  headerSubtitle: {
+  companySubtitle: {
+    fontSize: 8,
+    color: '#6b7280',
+    fontWeight: 300,
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+  },
+  docTypeBadge: {
+    backgroundColor: '#2563eb',
+    color: '#ffffff',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    fontSize: 11,
+    fontWeight: 700,
+    marginBottom: 4,
+  },
+  docNumber: {
+    fontSize: 8,
+    color: '#6b7280',
+  },
+
+  // Статус-строка
+  statusBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 20,
+  },
+  statusBadge: {
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    fontSize: 9,
+    fontWeight: 700,
+  },
+  statusCompleted: {
+    backgroundColor: '#d1fae5',
+    color: '#065f46',
+  },
+  statusActive: {
+    backgroundColor: '#dbeafe',
+    color: '#1e40af',
+  },
+  statusOther: {
+    backgroundColor: '#f3f4f6',
+    color: '#374151',
+  },
+
+  // Секции
+  section: {
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  sectionHeader: {
+    backgroundColor: '#f8fafc',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  sectionTitle: {
     fontSize: 10,
-    color: WHITE,
-    textAlign: 'center',
+    fontWeight: 700,
+    color: '#374151',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sectionBody: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+
+  // Строки в секции
+  row: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  col50: {
+    width: '50%',
+  },
+  col33: {
+    width: '33.33%',
+  },
+  col100: {
+    width: '100%',
+  },
+  label: {
+    fontSize: 8,
+    color: '#9ca3af',
+    fontWeight: 300,
     marginBottom: 2,
   },
-  headerBanner: {
-    backgroundColor: BLUE,
-    padding: 14,
-    marginBottom: 14,
-    borderRadius: 3,
+  value: {
+    fontSize: 10,
+    color: '#1f2937',
+    fontWeight: 400,
   },
-  headerRow: {
+  valueBold: {
+    fontSize: 10,
+    color: '#1f2937',
+    fontWeight: 700,
+  },
+  valueAccent: {
+    fontSize: 14,
+    color: '#059669',
+    fontWeight: 700,
+  },
+  valuePrimary: {
+    fontSize: 11,
+    color: '#2563eb',
+    fontWeight: 700,
+  },
+
+  // Описание
+  descriptionText: {
+    fontSize: 10,
+    color: '#374151',
+    lineHeight: 1.6,
+  },
+
+  // Разделитель
+  divider: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    marginBottom: 10,
+    marginTop: 2,
+  },
+
+  // Подвал
+  footer: {
+    position: 'absolute',
+    bottom: 30,
+    left: 40,
+    right: 40,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 8,
+    color: '#9ca3af',
+  },
+
+  // Подписи
+  signaturesRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 8,
   },
-  headerLeft: { fontSize: 9, color: WHITE },
-  headerRight: { fontSize: 9, color: WHITE, textAlign: 'right' },
-
-  // ─── Секция ──────────────────────────────────────────
-  section: { marginBottom: 12 },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: WHITE,
-    backgroundColor: BLUE,
-    padding: '5 10',
-    marginBottom: 6,
-    borderRadius: 2,
+  signatureBlock: {
+    width: '42%',
   },
-  sectionBody: {
-    paddingHorizontal: 4,
-  },
-
-  // ─── Текст ───────────────────────────────────────────
-  text: { fontSize: 10, lineHeight: 1.5, marginBottom: 3 },
-  bold: { fontWeight: 'bold' },
-
-  // ─── Таблица ─────────────────────────────────────────
-  table: { marginTop: 4 },
-  tableHead: {
-    flexDirection: 'row',
-    backgroundColor: BLUE,
-  },
-  tableRow: { flexDirection: 'row' },
-  tableRowEven: { backgroundColor: LIGHT_GRAY },
-  tableCell: {
-    padding: '4 5',
-    fontSize: 9,
-    borderRightColor: '#cccccc',
-    borderRightWidth: 0.5,
-  },
-  tableCellHead: {
-    padding: '4 5',
-    fontSize: 9,
-    color: WHITE,
-    fontWeight: 'bold',
-    borderRightColor: '#ffffff',
-    borderRightWidth: 0.5,
-  },
-  cellName:   { width: '38%' },
-  cellQty:    { width: '12%', textAlign: 'center' },
-  cellUnit:   { width: '10%', textAlign: 'center' },
-  cellPrice:  { width: '20%', textAlign: 'right' },
-  cellTotal:  { width: '20%', textAlign: 'right', borderRightWidth: 0 },
-
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 6,
-    paddingTop: 4,
-    borderTopColor: BLUE,
-    borderTopWidth: 1,
-  },
-  totalLabel: { fontSize: 10, fontWeight: 'bold', color: BLUE, marginRight: 8 },
-  totalValue: { fontSize: 11, fontWeight: 'bold', color: BLUE },
-
-  // ─── Реквизиты ───────────────────────────────────────
-  signaturesRow: { flexDirection: 'row', gap: 20, marginTop: 4 },
-  signatureBlock: { flex: 1 },
   signatureTitle: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: BLUE,
-    marginBottom: 5,
-    borderBottomColor: BLUE,
-    borderBottomWidth: 1,
-    paddingBottom: 3,
+    fontSize: 9,
+    color: '#6b7280',
+    marginBottom: 24,
   },
   signatureLine: {
-    marginTop: 18,
-    borderTopColor: BLACK,
-    borderTopWidth: 0.5,
-    width: 120,
+    borderBottomWidth: 1,
+    borderBottomColor: '#9ca3af',
+    marginBottom: 4,
   },
-  signatureHint: { fontSize: 8, color: GRAY, marginTop: 2 },
-
-  // ─── Подвал ──────────────────────────────────────────
-  footer: {
-    position: 'absolute',
-    bottom: 12,
-    left: 25,
-    right: 25,
-    borderTopColor: '#cccccc',
-    borderTopWidth: 0.5,
-    paddingTop: 4,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  signatureCaption: {
+    fontSize: 8,
+    color: '#9ca3af',
+    textAlign: 'center',
   },
-  footerText: { fontSize: 7, color: GRAY },
 });
 
-// ─── Вспомогалки ─────────────────────────────────────────────────────────────
+// ── Вспомогательные функции ─────────────────────────────────────────────────
+const formatDate = (dateString) => {
+  if (!dateString) return 'Н/Д';
+  return new Date(dateString).toLocaleDateString('ru-RU');
+};
 
-const MONTHS = [
-  'января','февраля','марта','апреля','мая','июня',
-  'июля','августа','сентября','октября','ноября','декабря',
-];
+const formatDateTime = (dateString) => {
+  if (!dateString) return 'Н/Д';
+  return new Date(dateString).toLocaleString('ru-RU');
+};
 
-function formatRu(amount) {
+const formatAmount = (amount) => {
   if (amount == null) return '0,00 ₽';
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency',
     currency: 'RUB',
     minimumFractionDigits: 2,
   }).format(amount);
-}
+};
 
-function formatDateFull(dateStr) {
-  if (!dateStr) return '—';
-  const d = new Date(dateStr);
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()} г.`;
-}
+const getStatusStyle = (status) => {
+  switch (status) {
+    case 'Завершён':
+      return styles.statusCompleted;
+    case 'Активен':
+      return styles.statusActive;
+    default:
+      return styles.statusOther;
+  }
+};
 
-// ─── Компонент ───────────────────────────────────────────────────────────────
-
-export function DocumentPDF({ doc }) {
-  console.log('document')
-  console.log(doc)
-  //const hasItems = doc.items && doc.items.length > 0;
-  const createdDate = doc.Created_at;
-
+// ── Основной компонент ──────────────────────────────────────────────────────
+export const DocumentPDF = ({ docData }) => {
+  const doc = docData; // для удобства, чтобы не менять внутренний код
   return (
-    <Document title={`Договор ${doc.Doc_number}`} author="Система управления">
-      <Page size="A4" style={s.page}>
+  <Document
+    title={`Документ ${doc.Doc_number}`}
+    author="Система управления"
+    subject={doc.Doc_type}
+    creator="WarehouseApp"
+  >
+    <Page size="A4" style={styles.page}>
 
-        {/* ── Шапка ── */}
-        <View style={s.headerBanner}>
-          <Text style={s.headerTitle}>ДОГОВОР ПОСТАВКИ</Text>
-          <Text style={s.headerSubtitle}>№ {doc.Doc_number}</Text>
-          <View style={s.headerRow}>
-            <Text style={s.headerLeft}>г. Москва</Text>
-            <Text style={s.headerRight}>
-              от {createdDate.getDate()} {MONTHS[createdDate.getMonth()]} {createdDate.getFullYear()} г.
-            </Text>
-          </View>
-        </View>
-
-        {/* ── 1. Стороны ── */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>1. СТОРОНЫ ДОГОВОРА</Text>
-          <View style={s.sectionBody}>
-            <Text style={s.text}>
-              <Text style={s.bold}>Поставщик: </Text>
-              {doc.vendor_name}, в лице Генерального директора, действующего на основании
-              Устава, именуемый в дальнейшем «Поставщик».
-            </Text>
-            <Text style={s.text}>
-              <Text style={s.bold}>Покупатель: </Text>
-              {doc.user_name || 'Покупатель'}, именуемый в дальнейшем «Покупатель».
-            </Text>
-          </View>
-        </View>
-
-        {/* ── 2. Предмет ── */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>2. ПРЕДМЕТ ДОГОВОРА</Text>
-          <View style={s.sectionBody}>
-            <Text style={s.text}>
-              {doc.Description ||
-                'Поставщик обязуется передать в собственность Покупателю товары, а Покупатель ' +
-                'обязуется принять и оплатить эти товары на условиях настоящего договора.'}
-            </Text>
-          </View>
-        </View>
-
-        {/* ── 3. Товары / Цена ── */}
-        {/* {hasItems ? (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>3. ПЕРЕЧЕНЬ ТОВАРОВ</Text>
-            <View style={[s.sectionBody, s.table]}>
-
-              <View style={s.tableHead}>
-                <Text style={[s.tableCellHead, s.cellName]}>Наименование</Text>
-                <Text style={[s.tableCellHead, s.cellQty]}>Кол-во</Text>
-                <Text style={[s.tableCellHead, s.cellUnit]}>Ед.</Text>
-                <Text style={[s.tableCellHead, s.cellPrice]}>Цена</Text>
-                <Text style={[s.tableCellHead, s.cellTotal]}>Сумма</Text>
-              </View>
-
-              {doc.items.map((item, i) => (
-                <View
-                  key={i}
-                  style={[s.tableRow, i % 2 === 1 ? s.tableRowEven : {}]}
-                >
-                  <Text style={[s.tableCell, s.cellName]}>{item.name || 'Товар'}</Text>
-                  <Text style={[s.tableCell, s.cellQty]}>{item.quantity || 1}</Text>
-                  <Text style={[s.tableCell, s.cellUnit]}>{item.unit || 'шт'}</Text>
-                  <Text style={[s.tableCell, s.cellPrice]}>{formatRu(item.price)}</Text>
-                  <Text style={[s.tableCell, s.cellTotal]}>
-                    {formatRu((item.quantity || 1) * (item.price || 0))}
-                  </Text>
-                </View>
-              ))}
-
-              <View style={s.totalRow}>
-                <Text style={s.totalLabel}>Итого:</Text>
-                <Text style={s.totalValue}>{formatRu(doc.Total_amount)}</Text>
-              </View>
-            </View>
-          </View>
-        ) : (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>3. ЦЕНА ДОГОВОРА И ПОРЯДОК РАСЧЁТОВ</Text>
-            <View style={s.sectionBody}>
-              <Text style={s.text}>
-                3.1. Общая стоимость настоящего договора составляет{' '}
-                <Text style={s.bold}>{formatRu(doc.Total_amount)}</Text>.
-              </Text>
-              <Text style={s.text}>3.2. НДС не облагается (УСН).</Text>
-              <Text style={s.text}>
-                3.3. Оплата производится в течение 10 (десяти) рабочих дней с момента
-                подписания договора.
-              </Text>
-            </View>
-          </View>
-        )} */}
-
-        {/* ── 4. Условия поставки ── */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>4. УСЛОВИЯ ПОСТАВКИ</Text>
-          <View style={s.sectionBody}>
-            <Text style={s.text}>
-              4.1. Поставка осуществляется в течение 14 (четырнадцати) рабочих дней с
-              момента получения предоплаты.
-            </Text>
-            <Text style={s.text}>
-              4.2. Доставка товаров осуществляется силами Поставщика за его счёт.
-            </Text>
-            <Text style={s.text}>
-              4.3. Право собственности переходит к Покупателю с момента подписания
-              товарной накладной.
-            </Text>
-          </View>
-        </View>
-
-        {/* ── 5. Ответственность ── */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>5. ОТВЕТСТВЕННОСТЬ СТОРОН</Text>
-          <View style={s.sectionBody}>
-            <Text style={s.text}>
-              5.1. За нарушение сроков поставки Поставщик уплачивает пеню в размере 0,1%
-              от стоимости непоставленного товара за каждый день просрочки.
-            </Text>
-            <Text style={s.text}>
-              5.2. За нарушение сроков оплаты Покупатель уплачивает пеню в размере 0,1%
-              от суммы просроченного платежа за каждый день просрочки.
-            </Text>
-            <Text style={s.text}>
-              5.3. Уплата неустойки не освобождает стороны от исполнения обязательств.
-            </Text>
-          </View>
-        </View>
-
-        {/* ── 6. Реквизиты ── */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>6. РЕКВИЗИТЫ И ПОДПИСИ СТОРОН</Text>
-          <View style={[s.sectionBody, s.signaturesRow]}>
-            {/* Поставщик */}
-            <View style={s.signatureBlock}>
-              <Text style={s.signatureTitle}>ПОСТАВЩИК</Text>
-              <Text style={s.text}>Наименование: {doc.vendor_name}</Text>
-              <Text style={s.text}>ИНН: 7701234567</Text>
-              <Text style={s.text}>КПП: 770101001</Text>
-              <Text style={s.text}>ОГРН: 1234567890123</Text>
-              <Text style={s.text}>Адрес: 127000, г. Москва, ул. Тверская, д. 1</Text>
-              <Text style={s.text}>р/с 40702810123456789012</Text>
-              <Text style={s.text}>ПАО Сбербанк, БИК 044525225</Text>
-              <Text style={s.text}>к/с 30101810400000000225</Text>
-              <View style={s.signatureLine} />
-              <Text style={s.signatureHint}>подпись / расшифровка</Text>
-            </View>
-
-            {/* Покупатель */}
-            <View style={s.signatureBlock}>
-              <Text style={s.signatureTitle}>ПОКУПАТЕЛЬ</Text>
-              <Text style={s.text}>Наименование: {doc.user_name || 'Покупатель'}</Text>
-              <Text style={s.text}>ИНН: 7709876543</Text>
-              <Text style={s.text}>КПП: 770901002</Text>
-              <Text style={s.text}>ОГРН: 9876543210987</Text>
-              <Text style={s.text}>Адрес: 127000, г. Москва, ул. Арбат, д. 10</Text>
-              <View style={s.signatureLine} />
-              <Text style={s.signatureHint}>подпись / расшифровка</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Подвал ── */}
-        <View style={s.footer} fixed>
-          <Text style={s.footerText}>
-            Договор № {doc.Doc_number} от {formatDateFull(doc.Created_at)}
-          </Text>
-          <Text style={s.footerText}>
-            Сформирован: {new Date().toLocaleString('ru-RU')}
+      {/* ── Шапка ─────────────────────────────────────────────────────── */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <Text style={styles.companyName}>Система управления складом</Text>
+          <Text style={styles.companySubtitle}>
+            Автоматически сформированный документ
           </Text>
         </View>
+        <View style={styles.headerRight}>
+          <Text style={styles.docTypeBadge}>{doc.Doc_type}</Text>
+          <Text style={styles.docNumber}>{doc.Doc_number}</Text>
+        </View>
+      </View>
 
-      </Page>
-    </Document>
-  );
+      {/* ── Статус ────────────────────────────────────────────────────── */}
+      <View style={styles.statusBar}>
+        <Text style={[styles.statusBadge, getStatusStyle(doc.Status)]}>
+          {doc.Status}
+        </Text>
+      </View>
+
+      {/* ── Основная информация ───────────────────────────────────────── */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Основная информация</Text>
+        </View>
+        <View style={styles.sectionBody}>
+          <View style={styles.row}>
+            <View style={styles.col50}>
+              <Text style={styles.label}>Номер документа</Text>
+              <Text style={styles.valuePrimary}>{doc.Doc_number}</Text>
+            </View>
+            <View style={styles.col50}>
+              <Text style={styles.label}>Тип документа</Text>
+              <Text style={styles.valueBold}>{doc.Doc_type}</Text>
+            </View>
+          </View>
+          <View style={styles.row}>
+            <View style={styles.col50}>
+              <Text style={styles.label}>Дата создания</Text>
+              <Text style={styles.value}>{formatDateTime(doc.Created_at)}</Text>
+            </View>
+            <View style={styles.col50}>
+              <Text style={styles.label}>Дата документа</Text>
+              <Text style={styles.value}>{formatDate(doc.Doc_date) || 'Н/Д'}</Text>
+            </View>
+          </View>
+          <View style={styles.row}>
+            <View style={styles.col50}>
+              <Text style={styles.label}>ID документа</Text>
+              <Text style={styles.value}>#{doc.ID}</Text>
+            </View>
+            <View style={styles.col50}>
+              <Text style={styles.label}>Ответственный пользователь</Text>
+              <Text style={styles.value}>{doc.user_name}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Поставщик ─────────────────────────────────────────────────── */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Поставщик</Text>
+        </View>
+        <View style={styles.sectionBody}>
+          <View style={styles.row}>
+            <View style={styles.col50}>
+              <Text style={styles.label}>Наименование</Text>
+              <Text style={styles.valueBold}>{doc.vendor_name}</Text>
+            </View>
+            <View style={styles.col50}>
+              <Text style={styles.label}>ID поставщика</Text>
+              <Text style={styles.value}>#{doc.Vendor_id}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Финансовая информация ─────────────────────────────────────── */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Финансовая информация</Text>
+        </View>
+        <View style={styles.sectionBody}>
+          <View style={styles.row}>
+            <View style={styles.col50}>
+              <Text style={styles.label}>Итоговая сумма</Text>
+              <Text style={styles.valueAccent}>
+                {formatAmount(doc.Total_amount)}
+              </Text>
+            </View>
+            <View style={styles.col50}>
+              <Text style={styles.label}>Валюта</Text>
+              <Text style={styles.value}>{doc.Currency}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Описание ──────────────────────────────────────────────────── */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Описание</Text>
+        </View>
+        <View style={styles.sectionBody}>
+          <Text style={styles.descriptionText}>
+            {doc.Description?.trim() || 'Описание отсутствует'}
+          </Text>
+        </View>
+      </View>
+
+      {/* ── Подписи ───────────────────────────────────────────────────── */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Подписи</Text>
+        </View>
+        <View style={styles.sectionBody}>
+          <View style={styles.signaturesRow}>
+            <View style={styles.signatureBlock}>
+              <Text style={styles.signatureTitle}>Ответственный:</Text>
+              <View style={styles.signatureLine} />
+              <Text style={styles.signatureCaption}>
+                {doc.user_name} / подпись
+              </Text>
+            </View>
+            <View style={styles.signatureBlock}>
+              <Text style={styles.signatureTitle}>Принял:</Text>
+              <View style={styles.signatureLine} />
+              <Text style={styles.signatureCaption}>подпись</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Подвал страницы ───────────────────────────────────────────── */}
+      <View style={styles.footer} fixed>
+        <Text style={styles.footerText}>
+          Сформировано: {new Date().toLocaleString('ru-RU')}
+        </Text>
+        <Text style={styles.footerText}>{doc.Doc_number}</Text>
+        <Text
+          style={styles.footerText}
+          render={({ pageNumber, totalPages }) =>
+            `Страница ${pageNumber} из ${totalPages}`
+          }
+        />
+      </View>
+
+    </Page>
+  </Document>
+);
 }
