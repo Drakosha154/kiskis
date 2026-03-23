@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Form, Modal, Tab, Tabs, Table, Row, Col } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
 
 function VendorsPage({ setError }) {
   const [vendors, setVendors] = useState([]);
@@ -10,6 +11,7 @@ function VendorsPage({ setError }) {
   const [vendorProducts, setVendorProducts] = useState([]);
   const [activeTab, setActiveTab] = useState('info');
   const [productAddMode, setProductAddMode] = useState('existing');
+  const navigate = useNavigate();
   
   const [newVendor, setNewVendor] = useState({
     company_name: '',
@@ -78,6 +80,7 @@ function VendorsPage({ setError }) {
       const data = await response.json();
       setProducts(data.products || []);
     } catch (err) {
+      navigate('/login');
       setError('Ошибка загрузки товаров: ' + err.message);
     }
   };

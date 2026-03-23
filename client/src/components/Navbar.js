@@ -2,8 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import AccountingModal from '../components/AccountingModal';
+import { useNavigate } from 'react-router-dom';
 
-export default function Navbar({setError}) {
+export default function Navbar({setAuth}) {
+  const navigate = useNavigate();
   const [money, setMoney] = useState('');
   const [showModal, setShowModal] = useState(false);
 
@@ -33,7 +35,7 @@ export default function Navbar({setError}) {
       const data = await response.json();
       setMoney(data.Money);
     } catch (err) {
-      setError('Ошибка загрузки баланса: ' + err.message);
+      console.log('Ошибка загрузки баланса: ' + err.message);
     }
   };
 
@@ -43,6 +45,12 @@ export default function Navbar({setError}) {
       currency: 'RUB',
       minimumFractionDigits: 2
     }).format(amount);
+  };
+
+  const exit = () => {
+    localStorage.removeItem('token');
+    setAuth(false);
+    navigate('/login');
   };
   
   return (
@@ -59,10 +67,12 @@ export default function Navbar({setError}) {
               <i className="bi bi-cash-coin me-1"></i>
               <span className="fw-bold">{formatMoney(money)}</span>
             </button>
-            <a className="btn btn-outline-light btn-sm d-flex align-items-center" href="/login">
+            <button className="btn btn-outline-light btn-sm d-flex align-items-center"
+              onClick={exit}
+            >
               <i className="bi bi-box-arrow-in-right me-1"></i>
               Выход
-            </a>
+            </button>
           </div>
         </div>
       </nav>
@@ -70,7 +80,6 @@ export default function Navbar({setError}) {
       <AccountingModal 
         show={showModal}
         onHide={() => setShowModal(false)}
-        setError={setError}
       />
     </>
   );

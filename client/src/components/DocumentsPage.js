@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { pdf } from '@react-pdf/renderer';
+import { DocumentPDF } from './DocumentPDF';
 
 function DocumentsPage({ setError }) {
   const [documents, setDocuments] = useState([]);
@@ -6,7 +8,6 @@ function DocumentsPage({ setError }) {
   const [showModal, setShowModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
 
-  // Загрузка списка документов
   useEffect(() => {
     fetchDocuments();
   }, []);
@@ -36,7 +37,7 @@ function DocumentsPage({ setError }) {
       setLoading(false);
     }
   };
-
+  
   const handleViewDocument = (document) => {
     setSelectedDocument(document);
     setShowModal(true);
@@ -47,21 +48,18 @@ function DocumentsPage({ setError }) {
     setSelectedDocument(null);
   };
 
-  // Форматирование даты
   const formatDate = (dateString) => {
     if (!dateString) return 'Н/Д';
     const date = new Date(dateString);
     return date.toLocaleDateString('ru-RU');
   };
 
-  // Форматирование даты и времени
   const formatDateTime = (dateString) => {
     if (!dateString) return 'Н/Д';
     const date = new Date(dateString);
     return date.toLocaleString('ru-RU');
   };
 
-  // Форматирование суммы
   const formatAmount = (amount) => {
     return new Intl.NumberFormat('ru-RU', {
       style: 'currency',
@@ -130,19 +128,21 @@ function DocumentsPage({ setError }) {
                     {formatDate(doc.Created_at)}
                   </td>
                   <td>
+                    <span className={`badge ${doc.Status === 'Активен' ? 'bg-success' : 'bg-secondary'}`}>
                       {doc.Status}
+                    </span>
                   </td>
                   <td className="text-center">
                     <strong>{formatAmount(doc.Total_amount)}</strong>
                   </td>
                   <td className="text-center">
                     <button
-                      className="btn btn-outline-primary btn-sm"
+                      className="btn btn-outline-primary btn-sm me-2"
                       onClick={() => handleViewDocument(doc)}
                       title="Просмотреть детали"
                     >
                       <i className="bi bi-eye me-1"></i>
-                      Просмотреть
+                      Детали
                     </button>
                   </td>
                 </tr>
@@ -152,7 +152,7 @@ function DocumentsPage({ setError }) {
         </div>
       )}
 
-      {/* Модальное окно с детальной информацией */}
+      {/* Модальное окно остается без изменений */}
       {showModal && selectedDocument && (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-lg">
@@ -165,114 +165,70 @@ function DocumentsPage({ setError }) {
                 <button type="button" className="btn-close" onClick={handleCloseModal}></button>
               </div>
               <div className="modal-body">
-                {/* Основная информация */}
                 <div className="card mb-3 border-0 shadow-sm">
                   <div className="card-body">
                     <h5 className="border-bottom pb-2 mb-3">Основная информация</h5>
                     <div className="row">
                       <div className="col-md-6">
-                        <p className="mb-2">
-                          <strong>Номер договора:</strong>
-                        </p>
+                        <p><strong>Номер договора:</strong></p>
                         <p className="text-primary h5">{selectedDocument.Doc_number}</p>
                       </div>
                       <div className="col-md-6">
-                        <p className="mb-2">
-                          <strong>Тип документа:</strong>
-                        </p>
+                        <p><strong>Тип документа:</strong></p>
                         <p>{selectedDocument.Doc_type}</p>
                       </div>
                     </div>
-                    
                     <div className="row mt-3">
                       <div className="col-md-6">
-                        <p className="mb-2">
-                          <strong>Дата создания:</strong>
-                        </p>
-                        <p>
-                          {formatDateTime(selectedDocument.Created_at)}
-                        </p>
+                        <p><strong>Дата создания:</strong></p>
+                        <p>{formatDateTime(selectedDocument.Created_at)}</p>
                       </div>
                       <div className="col-md-6">
-                        <p className="mb-2">
-                          <strong>Дата документа:</strong>
-                        </p>
-                        <p>
-                          <i className="bi bi-clock me-2 text-muted"></i>
-                          {formatDate(selectedDocument.Created_at)}
-                        </p>
+                        <p><strong>Статус:</strong></p>
+                        <p><span className={`badge ${selectedDocument.Status === 'Активен' ? 'bg-success' : 'bg-secondary'}`}>{selectedDocument.Status}</span></p>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Информация о поставщике */}
                 <div className="card mb-3 border-0 shadow-sm">
                   <div className="card-body">
                     <h5 className="border-bottom pb-2 mb-3">Информация о поставщике</h5>
                     <div className="row">
                       <div className="col-md-6">
-                        <p className="mb-2">
-                          <strong>Поставщик:</strong>
-                        </p>
-                        <p>
-                          <i className="bi bi-building me-2 text-muted"></i>
-                          {selectedDocument.vendor_name}
-                        </p>
+                        <p><strong>Поставщик:</strong></p>
+                        <p><i className="bi bi-building me-2 text-muted"></i>{selectedDocument.vendor_name}</p>
                       </div>
                       <div className="col-md-6">
-                        <p className="mb-2">
-                          <strong>Пользователь:</strong>
-                        </p>
-                        <p>
-                          <i className="bi bi-person me-2 text-muted"></i>
-                          {selectedDocument.user_name}
-                        </p>
+                        <p><strong>Пользователь:</strong></p>
+                        <p><i className="bi bi-person me-2 text-muted"></i>{selectedDocument.user_name}</p>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Финансовая информация */}
                 <div className="card mb-3 border-0 shadow-sm">
                   <div className="card-body">
                     <h5 className="border-bottom pb-2 mb-3">Финансовая информация</h5>
                     <div className="row">
                       <div className="col-md-6">
-                        <p className="mb-2">
-                          <strong>Сумма договора:</strong>
-                        </p>
-                        <p className="text-success h4">
-                          {formatAmount(selectedDocument.Total_amount)}
-                        </p>
-                      </div>
-                      <div className="col-md-6">
-                        <p className="mb-2">
-                          <strong>Статус:</strong>
-                        </p>
-                          {selectedDocument.Status}
+                        <p><strong>Сумма договора:</strong></p>
+                        <p className="text-success h4">{formatAmount(selectedDocument.Total_amount)}</p>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Описание */}
                 <div className="card border-0 shadow-sm">
                   <div className="card-body">
                     <h5 className="border-bottom pb-2 mb-3">Описание</h5>
-                    <p className="mb-0">
-                      {selectedDocument.Description || 'Нет описания'}
-                    </p>
+                    <p className="mb-0">{selectedDocument.Description || 'Нет описания'}</p>
                   </div>
                 </div>
               </div>
               <div className="modal-footer bg-light">
                 <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
                   Закрыть
-                </button>
-                <button type="button" className="btn btn-primary ms-2" onClick={() => window.print()}>
-                  <i className="bi bi-printer me-2"></i>
-                  Печать
                 </button>
               </div>
             </div>
