@@ -6,6 +6,7 @@ import ContractsPage from '../components/ContractsPage';
 import WarehousePage from '../components/WarehousePage';
 import DocumentsPage from '../components/DocumentsPage';
 import ReportsPage from '../components/ReportsPage';
+import AccountingModal from '../components/AccountingModal';
 
 function MainPage() {
   const navigate = useNavigate();
@@ -35,6 +36,8 @@ function MainPage() {
         return <WarehousePage setError={setError} onBalanceUpdate={refreshBalance} />;
       case 'documents':
         return <DocumentsPage setError={setError} />;
+      case 'accounting':
+        return <AccountingModal setError={setError} />;
       case 'reports':
         return <ReportsPage setError={setError} />;
       default:
@@ -85,6 +88,14 @@ function MainPage() {
             onClick={() => setActivePage('documents')}
           >
             Документы
+          </button>
+          <button 
+            className={`btn btn-lg border border-2 border-black btn-info ${activePage === 'accounting' ? 'btn-success' : 'btn-primary'}`} 
+            type="button" 
+            style={{width:'200px', height:'65px'}}
+            onClick={() => setActivePage('accounting')}
+          >
+            Бухгалтерия
           </button>
           <button 
             className={`btn btn-lg border border-2 border-black btn-info ${activePage === 'reports' ? 'btn-success' : 'btn-primary'}`} 
