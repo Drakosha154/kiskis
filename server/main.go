@@ -105,6 +105,12 @@ func main() {
 		authGroup.GET("/accounting/operations", routes.GetAccountingOperations)
 		authGroup.GET("/accounting/summary", routes.GetAccountingSummary)
 
+		// KPI
+		authGroup.GET("/kpi/summary", routes.GetKPISummary)
+		authGroup.GET("/kpi/purchase-volume", routes.GetPurchaseVolumeDetails)
+		authGroup.GET("/kpi/purchase-cost", routes.GetPurchaseCostDetails)
+		authGroup.GET("/kpi/calendar", routes.GetCalendarEvents)
+
 		// adminGroup := authGroup.Group("/admin")
 		// adminGroup.Use(routes.AdminMiddleware())
 		// 	{
