@@ -22,8 +22,13 @@ const Login = ({ setAuth }) => {
       const data = await response.json();
       if (response.ok) {
         localStorage.setItem('token', data.token);
+        console.log(data)
         setAuth(true);
-        navigate('/');
+        if (data.user.role === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/');
+        }
       } else {
         setError(data.error || 'Login failed');
       }

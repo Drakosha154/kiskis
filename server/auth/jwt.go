@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"kiskis/database"
+	"kiskis/models"
 	"os"
 	"time"
 
@@ -18,9 +20,16 @@ type Claims struct {
 
 // Генерация токена
 func GenerateToken(userID uint) (string, error) {
+
+	var user models.User
+	if err := database.DB.First(&user, userID).Error; err != nil {
+		return "", err
+	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id":  userID,
-		"exp": jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+		"id":   userID,
+		"role": user.Role,
+		"exp":  jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 	})
 	return token.SignedString([]byte(SecretKey))
 }
