@@ -1,880 +1,480 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
-// ─── Утилиты ──────────────────────────────────────────────────────────────
+// ─── Вспомогательные компоненты ───────────────────────────────────────────
 
-const API = (path, token) =>
-  fetch(`/api${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-const formatMoney = (v) =>
-  new Intl.NumberFormat('ru-RU', {
-    style: 'currency',
-    currency: 'RUB',
-    maximumFractionDigits: 0,
-  }).format(v ?? 0);
-
-const formatNum = (v, decimals = 2) =>
-  v != null ? Number(v).toFixed(decimals) : '—';
-
-// Получить токен из localStorage
-const getToken = () => localStorage.getItem('token') || '';
-
-// ─── Скелетон ─────────────────────────────────────────────────────────────
-
-function Skeleton({ width = '100%', height = 20, className = '' }) {
+/** Карточка с метрикой */
+function MetricCard({ title, value, icon, colorClass, subtitle }) {
   return (
-    <div
-      className={`rounded ${className}`}
-      style={{
-        width,
-        height,
-        background:
-          'linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%)',
-        backgroundSize: '200% 100%',
-        animation: 'shimmer 1.2s infinite',
-      }}
-    />
-  );
-}
-
-// ─── Кликабельная карточка метрики ────────────────────────────────────────
-
-function MetricCard({
-  title,
-  value,
-  icon,
-  colorClass,
-  subtitle,
-  onClick,
-  clickable = false,
-  loading = false,
-}) {
-  return (
-    <div
-      className={`card border-0 shadow-sm h-100 ${
-        clickable ? 'metric-card-clickable' : ''
-      }`}
-      onClick={clickable ? onClick : undefined}
-      style={
-        clickable
-          ? { cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }
-          : {}
-      }
-      onMouseEnter={(e) => {
-        if (clickable) {
-          e.currentTarget.style.transform = 'translateY(-2px)';
-          e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,.12)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (clickable) {
-          e.currentTarget.style.transform = '';
-          e.currentTarget.style.boxShadow = '';
-        }
-      }}
-    >
+    <div className={`card border-0 shadow-sm h-100`}>
       <div className="card-body">
         <div className="d-flex align-items-center justify-content-between mb-2">
-          <span className="text-muted small fw-semibold text-uppercase">
-            {title}
-          </span>
-          <div className="d-flex align-items-center gap-1">
-            {icon && <span className={`fs-4 ${colorClass}`}>{icon}</span>}
-            {clickable && (
-              <span
-                className="text-muted"
-                style={{ fontSize: 11 }}
-                title="Нажмите для подробностей"
-              >
-                🔍
-              </span>
-            )}
-          </div>
+          <span className="text-muted small fw-semibold text-uppercase">{title}</span>
+          <span className={`fs-4 ${colorClass}`}>{icon}</span>
         </div>
-
-        {loading ? (
-          <>
-            <Skeleton height={36} className="mb-2" />
-            <Skeleton height={14} width="60%" />
-          </>
-        ) : (
-          <>
-            <div className={`fs-2 fw-bold ${colorClass}`}>{value}</div>
-            {subtitle && (
-              <div className="text-muted small mt-1">{subtitle}</div>
-            )}
-          </>
-        )}
-
-        {clickable && !loading && (
-          <div className="mt-2">
-            <span
-              className={`badge ${colorClass
-                .replace('text-', 'bg-')
-                .replace('bg-warning', 'bg-warning text-dark')} bg-opacity-10 small`}
-              style={{ fontSize: 10 }}
-            >
-              Подробнее →
-            </span>
-          </div>
-        )}
+        <div className={`fs-2 fw-bold ${colorClass}`}>{value}</div>
+        {subtitle && <div className="text-muted small mt-1">{subtitle}</div>}
       </div>
     </div>
   );
 }
 
-// ─── Мини-календарь ───────────────────────────────────────────────────────
-
-function MiniCalendar({ title, colorClass, icon, eventType }) {
-  const today = new Date();
-  const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth() + 1); // 1-12
-  const [events, setEvents] = useState([]);
-  const [calLoading, setCalLoading] = useState(false);
-  const [tooltip, setTooltip] = useState(null); // { day, x, y, event }
-
-  // Загрузка событий при смене месяца/года
-  useEffect(() => {
-    let cancelled = false;
-    setCalLoading(true);
-
-    API(
-      `/kpi/calendar?year=${year}&month=${month}&type=${eventType}`,
-      getToken()
-    )
-      .then((r) => (r.ok ? r.json() : { events: [] }))
-      .then((d) => {
-        if (!cancelled) setEvents(d.events || []);
-      })
-      .catch(() => {
-        if (!cancelled) setEvents([]);
-      })
-      .finally(() => {
-        if (!cancelled) setCalLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [year, month, eventType]);
-
-  // Построение сетки дней
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const firstDow = new Date(year, month - 1, 1).getDay(); // 0=вс
-  // Смещение: неделя с понедельника
-  const offset = (firstDow + 6) % 7;
-
-  // Карта событий: день → event
-  const eventMap = {};
-  events.forEach((ev) => {
-    const d = new Date(ev.date).getDate();
-    eventMap[d] = ev;
-  });
-
-  const prevMonth = () => {
-    if (month === 1) { setMonth(12); setYear(y => y - 1); }
-    else setMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (month === 12) { setMonth(1); setYear(y => y + 1); }
-    else setMonth(m => m + 1);
-  };
-
-  const monthNames = [
-    '', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
-  ];
-  const dowLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-
-  // Цвет точки события
-  const dotColor = eventType === 'delivery' ? '#0d6efd' : '#198754';
-
-  return (
-    <div className="card border-0 shadow-sm h-100">
-      <div className="card-body p-3">
-        {/* Заголовок */}
-        <div className="d-flex align-items-center justify-content-between mb-2">
-          <span className="text-muted small fw-semibold text-uppercase">
-            {icon} {title}
-          </span>
-        </div>
-
-        {/* Навигация по месяцам */}
-        <div className="d-flex align-items-center justify-content-between mb-2">
-          <button
-            className="btn btn-sm btn-outline-secondary py-0 px-2"
-            onClick={prevMonth}
-          >
-            ‹
-          </button>
-          <span className="fw-semibold small">
-            {monthNames[month]} {year}
-          </span>
-          <button
-            className="btn btn-sm btn-outline-secondary py-0 px-2"
-            onClick={nextMonth}
-          >
-            ›
-          </button>
-        </div>
-
-        {/* Дни недели */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(7, 1fr)',
-            gap: 2,
-          }}
-        >
-          {dowLabels.map((d) => (
-            <div
-              key={d}
-              className="text-center text-muted"
-              style={{ fontSize: 10, fontWeight: 600 }}
-            >
-              {d}
-            </div>
-          ))}
-
-          {/* Пустые ячейки до начала месяца */}
-          {Array.from({ length: offset }).map((_, i) => (
-            <div key={`e${i}`} />
-          ))}
-
-          {/* Дни */}
-          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
-            const hasEvent = !!eventMap[day];
-            const isToday =
-              day === today.getDate() &&
-              month === today.getMonth() + 1 &&
-              year === today.getFullYear();
-
-            return (
-              <div
-                key={day}
-                className="text-center position-relative"
-                style={{
-                  fontSize: 11,
-                  padding: '3px 0',
-                  borderRadius: 4,
-                  background: isToday ? '#e8f0fe' : 'transparent',
-                  fontWeight: isToday ? 700 : 400,
-                  cursor: hasEvent ? 'pointer' : 'default',
-                  color: isToday ? '#0d6efd' : '#333',
-                }}
-                onMouseEnter={(e) => {
-                  if (hasEvent) {
-                    setTooltip({ day, event: eventMap[day] });
-                  }
-                }}
-                onMouseLeave={() => setTooltip(null)}
-              >
-                {calLoading ? (
-                  <div
-                    style={{
-                      width: 14,
-                      height: 14,
-                      borderRadius: 3,
-                      background: '#eee',
-                      margin: '0 auto',
-                    }}
-                  />
-                ) : (
-                  <>
-                    {day}
-                    {hasEvent && (
-                      <span
-                        style={{
-                          display: 'block',
-                          width: 5,
-                          height: 5,
-                          borderRadius: '50%',
-                          background: dotColor,
-                          margin: '1px auto 0',
-                        }}
-                      />
-                    )}
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Тултип события */}
-        {tooltip && (
-          <div
-            className="card border shadow-sm position-absolute"
-            style={{
-              zIndex: 1000,
-              bottom: 10,
-              right: 10,
-              minWidth: 180,
-              fontSize: 12,
-              pointerEvents: 'none',
-            }}
-          >
-            <div className="card-body p-2">
-              <div className="fw-semibold mb-1">
-                {tooltip.event.description} — {tooltip.day}{' '}
-                {monthNames[month]}
-              </div>
-              <div className="text-muted">
-                Сумма: {formatMoney(tooltip.event.amount)}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Легенда */}
-        <div className="mt-2 d-flex align-items-center gap-1">
-          <span
-            style={{
-              display: 'inline-block',
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: dotColor,
-            }}
-          />
-          <span className="text-muted" style={{ fontSize: 10 }}>
-            {eventType === 'delivery' ? 'Дата поставки' : 'Дата оплаты'}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Модальное окно: Объём закупленного сырья ─────────────────────────────
-
-function PurchaseVolumeModal({ show, onClose, dateFrom, dateTo }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!show) return;
-    setLoading(true);
-    API(
-      `/kpi/purchase-volume?date_from=${dateFrom}&date_to=${dateTo}`,
-      getToken()
-    )
-      .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then(setData)
-      .catch(() => setData({ items: [] }))
-      .finally(() => setLoading(false));
-  }, [show, dateFrom, dateTo]);
-
-  if (!show) return null;
-
-  const items = data?.items || [];
-
-  return (
-    <ModalWrapper
-      title="📦 Объём закупленного сырья"
-      subtitle={`Период: ${dateFrom} — ${dateTo}`}
-      onClose={onClose}
-      size="lg"
-    >
-      {/* Сводные плашки */}
-      {!loading && items.length > 0 && (
-        <div className="row g-2 mb-3">
-          {[
-            {
-              label: 'Записей',
-              value: items.length,
-              color: 'primary',
-            },
-            {
-              label: 'Общий объём',
-              value: formatMoney(
-                items.reduce((s, i) => s + i.total_purchases_amount, 0)
-              ),
-              color: 'success',
-            },
-            {
-              label: 'Поставщиков (макс)',
-              value: Math.max(...items.map((i) => i.supplier_count)),
-              color: 'info',
-            },
-            {
-              label: 'Дефицитов',
-              value: items.reduce((s, i) => s + i.shortage_count, 0),
-              color: 'danger',
-            },
-          ].map((s) => (
-            <div className="col-6 col-md-3" key={s.label}>
-              <div className={`card border-0 bg-${s.color} bg-opacity-10`}>
-                <div className="card-body p-2 text-center">
-                  <div className={`fw-bold text-${s.color}`}>{s.value}</div>
-                  <div className="text-muted" style={{ fontSize: 11 }}>
-                    {s.label}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Таблица */}
-      <div className="table-responsive" style={{ maxHeight: 350 }}>
-        <table className="table table-sm table-hover align-middle mb-0">
-          <thead className="table-light sticky-top">
-            <tr>
-              <th>Период</th>
-              <th>Тип</th>
-              <th className="text-end">Объём закупок</th>
-              <th className="text-center">Поставщики</th>
-              <th className="text-center">Оборачиваемость</th>
-              <th className="text-center">Дефицитов</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i}>
-                  {Array.from({ length: 6 }).map((__, j) => (
-                    <td key={j}>
-                      <Skeleton height={14} />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="text-center text-muted py-4">
-                  Нет данных за выбранный период
-                </td>
-              </tr>
-            ) : (
-              items.map((item, idx) => (
-                <tr key={idx}>
-                  <td className="fw-semibold">{item.period_date}</td>
-                  <td>
-                    <PeriodBadge type={item.period_type} />
-                  </td>
-                  <td className="text-end text-primary fw-semibold">
-                    {formatMoney(item.total_purchases_amount)}
-                  </td>
-                  <td className="text-center">{item.supplier_count}</td>
-                  <td className="text-center">
-                    {formatNum(item.stock_turnover)}
-                  </td>
-                  <td className="text-center">
-                    {item.shortage_count > 0 ? (
-                      <span className="badge bg-danger">
-                        {item.shortage_count}
-                      </span>
-                    ) : (
-                      <span className="badge bg-success">0</span>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </ModalWrapper>
-  );
-}
-
-// ─── Модальное окно: Стоимость закупленного сырья ─────────────────────────
-
-function PurchaseCostModal({ show, onClose, dateFrom, dateTo }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!show) return;
-    setLoading(true);
-    API(
-      `/kpi/purchase-cost?date_from=${dateFrom}&date_to=${dateTo}`,
-      getToken()
-    )
-      .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then(setData)
-      .catch(() => setData({ items: [] }))
-      .finally(() => setLoading(false));
-  }, [show, dateFrom, dateTo]);
-
-  if (!show) return null;
-
-  const items = data?.items || [];
-
-  return (
-    <ModalWrapper
-      title="💰 Стоимость закупленного сырья"
-      subtitle={`Период: ${dateFrom} — ${dateTo}`}
-      onClose={onClose}
-      size="lg"
-    >
-      {/* Сводные плашки */}
-      {!loading && items.length > 0 && (
-        <div className="row g-2 mb-3">
-          {[
-            {
-              label: 'Стоимость склада',
-              value: formatMoney(
-                items.reduce((s, i) => s + i.stock_value, 0)
-              ),
-              color: 'primary',
-            },
-            {
-              label: 'Общие расходы',
-              value: formatMoney(
-                items.reduce((s, i) => s + i.total_expenses, 0)
-              ),
-              color: 'warning',
-            },
-            {
-              label: 'Ср. задержка оплаты',
-              value:
-                formatNum(
-                  items.reduce((s, i) => s + i.payment_delay_avg, 0) /
-                    items.length
-                ) + ' дн.',
-              color: items.some((i) => i.payment_delay_avg > 5)
-                ? 'danger'
-                : 'success',
-            },
-          ].map((s) => (
-            <div className="col-12 col-md-4" key={s.label}>
-              <div className={`card border-0 bg-${s.color} bg-opacity-10`}>
-                <div className="card-body p-2 text-center">
-                  <div className={`fw-bold text-${s.color}`}>{s.value}</div>
-                  <div className="text-muted" style={{ fontSize: 11 }}>
-                    {s.label}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Таблица */}
-      <div className="table-responsive" style={{ maxHeight: 350 }}>
-        <table className="table table-sm table-hover align-middle mb-0">
-          <thead className="table-light sticky-top">
-            <tr>
-              <th>Период</th>
-              <th>Тип</th>
-              <th className="text-end">Стоимость склада</th>
-              <th className="text-end">Общие расходы</th>
-              <th className="text-center">Задержка оплаты</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i}>
-                  {Array.from({ length: 5 }).map((__, j) => (
-                    <td key={j}>
-                      <Skeleton height={14} />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="text-center text-muted py-4">
-                  Нет данных за выбранный период
-                </td>
-              </tr>
-            ) : (
-              items.map((item, idx) => (
-                <tr key={idx}>
-                  <td className="fw-semibold">{item.period_date}</td>
-                  <td>
-                    <PeriodBadge type={item.period_type} />
-                  </td>
-                  <td className="text-end text-primary fw-semibold">
-                    {formatMoney(item.stock_value)}
-                  </td>
-                  <td className="text-end text-warning fw-semibold">
-                    {formatMoney(item.total_expenses)}
-                  </td>
-                  <td className="text-center">
-                    <DelayBadge days={item.payment_delay_avg} />
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </ModalWrapper>
-  );
-}
-
-// ─── Обёртка модального окна ──────────────────────────────────────────────
-
-function ModalWrapper({ title, subtitle, onClose, children, size = 'md' }) {
-  // Закрытие по Escape
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
-
-  const maxW = size === 'lg' ? 800 : size === 'xl' ? 1100 : 500;
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.45)',
-          zIndex: 1040,
-          backdropFilter: 'blur(2px)',
-        }}
-        onClick={onClose}
-      />
-
-      {/* Диалог */}
-      <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 1050,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '1rem',
-        }}
-      >
-        <div
-          className="card border-0 shadow-lg"
-          style={{
-            width: '100%',
-            maxWidth: maxW,
-            maxHeight: '85vh',
-            display: 'flex',
-            flexDirection: 'column',
-            animation: 'modalIn .18s ease',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Шапка */}
-          <div className="card-header bg-white border-bottom d-flex align-items-start justify-content-between">
-            <div>
-              <h5 className="mb-0 fw-bold">{title}</h5>
-              {subtitle && (
-                <span className="text-muted small">{subtitle}</span>
-              )}
-            </div>
-            <button
-              className="btn-close"
-              onClick={onClose}
-              aria-label="Закрыть"
-            />
-          </div>
-
-          {/* Тело */}
-          <div className="card-body overflow-auto">{children}</div>
-
-          {/* Подвал */}
-          <div className="card-footer bg-white border-top text-end">
-            <button className="btn btn-secondary btn-sm" onClick={onClose}>
-              Закрыть
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ─── Вспомогательные бейджи ───────────────────────────────────────────────
-
-function PeriodBadge({ type }) {
+/** Бейдж статуса договора */
+function StatusBadge({ status }) {
   const map = {
-    month:   { label: 'Месяц',   cls: 'bg-primary' },
-    quarter: { label: 'Квартал', cls: 'bg-info text-dark' },
-    year:    { label: 'Год',     cls: 'bg-secondary' },
+    active:    { label: 'Активен',    cls: 'bg-success' },
+    completed: { label: 'Завершён',   cls: 'bg-secondary' },
+    cancelled: { label: 'Отменён',    cls: 'bg-danger' },
+    pending:   { label: 'На рассмотрении', cls: 'bg-warning text-dark' },
   };
-  const s = map[type] || { label: type, cls: 'bg-secondary' };
+  const s = map[status] || { label: status, cls: 'bg-secondary' };
   return <span className={`badge ${s.cls}`}>{s.label}</span>;
 }
 
-function DelayBadge({ days }) {
-  const d = Number(days);
-  if (d === 0) return <span className="badge bg-success">0 дн.</span>;
-  if (d <= 3)  return <span className="badge bg-warning text-dark">{d.toFixed(1)} дн.</span>;
-  return <span className="badge bg-danger">{d.toFixed(1)} дн.</span>;
+/** Скелетон-загрузчик */
+function SkeletonRow({ cols }) {
+  return (
+    <tr>
+      {Array.from({ length: cols }).map((_, i) => (
+        <td key={i}>
+          <div
+            className="rounded"
+            style={{
+              height: 16,
+              background: 'linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'shimmer 1.2s infinite',
+            }}
+          />
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+/** Строка «нет данных» */
+function EmptyRow({ cols, text }) {
+  return (
+    <tr>
+      <td colSpan={cols} className="text-center text-muted py-4">
+        {text}
+      </td>
+    </tr>
+  );
+}
+
+/** Компонент календаря */
+function Calendar({ events, loading, onDateSelect, selectedDate }) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay(); // 0 = воскресенье
+    
+    // Преобразуем для начала с понедельника
+    let startOffset = startingDayOfWeek === 0 ? 6 : startingDayOfWeek - 1;
+    
+    return { daysInMonth, startOffset };
+  };
+
+  const getEventsForDate = (date) => {
+    if (!events) return [];
+    const dateStr = date.toISOString().split('T')[0];
+    return events.filter(event => event.date === dateStr);
+  };
+
+  const renderCalendar = () => {
+    const { daysInMonth, startOffset } = getDaysInMonth(currentDate);
+    const days = [];
+    const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    
+    // Заголовок с днями недели
+    days.push(
+      <div key="weekdays" className="d-flex mb-1">
+        {weekdays.map(day => (
+          <div key={day} className="flex-grow-1 text-center fw-semibold text-muted py-1" style={{ flexBasis: 0, fontSize: '0.875rem' }}>
+            {day}
+          </div>
+        ))}
+      </div>
+    );
+    
+    // Пустые ячейки для начала месяца
+    const emptyCells = [];
+    for (let i = 0; i < startOffset; i++) {
+      emptyCells.push(
+        <div key={`empty-${i}`} className="bg-light" style={{ flexBasis: 0, flexGrow: 1, minHeight: '70px', margin: '1px' }}>
+          <div className="p-1 text-muted small"></div>
+        </div>
+      );
+    }
+    
+    // Ячейки с днями месяца
+    const monthDays = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+      const dateStr = date.toISOString().split('T')[0];
+      const dayEvents = getEventsForDate(date);
+      const isToday = dateStr === new Date().toISOString().split('T')[0];
+      const isSelected = selectedDate === dateStr;
+      
+      monthDays.push(
+        <div 
+          key={day}
+          className={`border rounded ${isSelected ? 'border-primary bg-primary bg-opacity-10' : 'border-light'} ${isToday ? 'bg-info bg-opacity-25' : ''}`}
+          style={{ flexBasis: 0, flexGrow: 1, minHeight: '70px', margin: '1px', cursor: 'pointer' }}
+          onClick={() => onDateSelect(dateStr)}
+        >
+          <div className="p-1">
+            <div className={`fw-semibold mb-1 ${isToday ? 'text-info' : ''}`} style={{ fontSize: '0.875rem' }}>
+              {day}
+            </div>
+            {!loading && dayEvents.length > 0 && (
+              <div className="small" style={{ fontSize: '0.7rem' }}>
+                {dayEvents.slice(0, 1).map((event, idx) => (
+                  <div key={idx} className={`text-truncate ${event.type === 'deadline' ? 'text-danger' : 'text-warning'}`}>
+                    • {event.title.length > 20 ? event.title.substring(0, 18) + '...' : event.title}
+                  </div>
+                ))}
+                {dayEvents.length > 1 && (
+                  <div className="text-muted">+{dayEvents.length - 1}</div>
+                )}
+              </div>
+            )}
+            {loading && (
+              <div className="mt-1">
+                <div className="skeleton-line w-75 mb-1" style={{ height: '8px', background: '#e0e0e0', borderRadius: '2px' }} />
+                <div className="skeleton-line w-50" style={{ height: '8px', background: '#e0e0e0', borderRadius: '2px' }} />
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+    
+    // Объединяем все ячейки в строки
+    const allCells = [...emptyCells, ...monthDays];
+    const rows = [];
+    for (let i = 0; i < allCells.length; i += 7) {
+      rows.push(
+        <div key={`row-${i}`} className="d-flex mb-1" style={{ minHeight: '70px' }}>
+          {allCells.slice(i, i + 7)}
+        </div>
+      );
+    }
+    
+    return (
+      <div>
+        {days}
+        {rows}
+      </div>
+    );
+  };
+
+  const changeMonth = (increment) => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + increment, 1));
+    onDateSelect(null);
+  };
+
+  const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+
+  return (
+    <div>
+      <div className="d-flex align-items-center justify-content-between mb-3">
+        <button className="btn btn-outline-secondary btn-sm" onClick={() => changeMonth(-1)}>
+          ← Предыдущий
+        </button>
+        <h5 className="mb-0 fw-semibold" style={{ fontSize: '1rem' }}>
+          {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+        </h5>
+        <button className="btn btn-outline-secondary btn-sm" onClick={() => changeMonth(1)}>
+          Следующий →
+        </button>
+      </div>
+      {renderCalendar()}
+    </div>
+  );
+}
+
+/** Компонент для отображения деталей выбранной даты */
+function EventDetails({ selectedDate, events, loading }) {
+  const getEventsForDate = (dateStr) => {
+    if (!events || !dateStr) return [];
+    return events.filter(event => event.date === dateStr);
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+  };
+
+  const dayEvents = getEventsForDate(selectedDate);
+
+  if (!selectedDate) {
+    return (
+      <div className="bg-light rounded p-3 h-100 d-flex align-items-center justify-content-center">
+        <div className="text-center text-muted">
+          <div className="fs-2 mb-2">📅</div>
+          <h6 className="mb-1">Выберите дату в календаре</h6>
+          <p className="mb-0 small">Нажмите на любой день, чтобы увидеть события</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-light rounded p-3 h-100">
+        <div className="skeleton-line w-75 mb-2" style={{ height: '20px', background: '#e0e0e0', borderRadius: '4px' }} />
+        <div className="skeleton-line w-100 mb-2" style={{ height: '50px', background: '#e0e0e0', borderRadius: '4px' }} />
+        <div className="skeleton-line w-100 mb-2" style={{ height: '50px', background: '#e0e0e0', borderRadius: '4px' }} />
+        <div className="skeleton-line w-100" style={{ height: '50px', background: '#e0e0e0', borderRadius: '4px' }} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-light rounded p-3" style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 280px)' }}>
+      <div className="mb-3">
+        <h6 className="mb-1 fw-bold">📅 {formatDate(selectedDate)}</h6>
+        <div className="small text-muted">События на этот день</div>
+      </div>
+      
+      {dayEvents.length > 0 ? (
+        <div>
+          {dayEvents.map((event, idx) => (
+            <div key={idx} className="mb-2 p-2 bg-white rounded border shadow-sm">
+              <div className={`fw-semibold mb-1 small ${event.type === 'deadline' ? 'text-danger' : 'text-warning'}`}>
+                {event.type === 'deadline' ? '⚠️ ' : '🚚 '}{event.title}
+              </div>
+              <div className="small text-muted mb-1">{event.description}</div>
+              <div className="d-flex gap-2 mt-1">
+                <span className={`badge ${event.type === 'deadline' ? 'bg-danger' : 'bg-warning text-dark'}`} style={{ fontSize: '0.7rem' }}>
+                  {event.type === 'deadline' ? 'Дедлайн' : 'Поставка'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center text-muted py-3">
+          <div className="fs-2 mb-2">✨</div>
+          <p className="mb-0 small">Нет событий на этот день</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Главный компонент ────────────────────────────────────────────────────
 
 function ReportsPage({ setError }) {
-  const today    = new Date().toISOString().split('T')[0];
+  // Получаем даты: сегодня и месяц назад
+  const today = new Date().toISOString().split('T')[0];
   const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     .toISOString()
     .split('T')[0];
 
   const [dateFrom, setDateFrom] = useState(monthAgo);
   const [dateTo,   setDateTo]   = useState(today);
-  const [kpi,      setKpi]      = useState(null);
+  const [data,     setData]     = useState(null);
   const [loading,  setLoading]  = useState(false);
+  const [activeTab, setActiveTab] = useState('summary'); // 'summary' или 'details'
+  const [selectedDate, setSelectedDate] = useState(null);
 
-  // Состояния модальных окон
-  const [showVolumeModal, setShowVolumeModal] = useState(false);
-  const [showCostModal,   setShowCostModal]   = useState(false);
+  // Пример данных для календаря (в реальном приложении будут приходить с API)
+  const calendarEvents = [
+    { date: '2026-12-15', title: 'Срок оплаты №123', description: 'Оплатить счет 150 000 ₽', type: 'deadline' },
+    { date: '2024-12-20', title: 'Поставка сырья', description: '500 кг от ООО "Поставщик"', type: 'delivery' },
+    { date: '2024-12-25', title: 'Срок подачи претензии', description: 'По договору №456', type: 'deadline' },
+    { date: '2025-01-10', title: 'Плановая проверка', description: 'Проверка качества сырья', type: 'deadline' },
+    { date: '2024-12-05', title: 'Согласование договора', description: 'Новый договор с поставщиком', type: 'deadline' },
+    { date: '2024-12-18', title: 'Отгрузка готовой продукции', description: 'Заказ №789', type: 'delivery' },
+  ];
 
-  // ── Загрузка KPI ────────────────────────────────────────────────────────
-  const fetchKPI = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await API(
-        `/kpi/summary?date_from=${dateFrom}&date_to=${dateTo}`,
-        getToken()
-      );
-      if (!res.ok) throw new Error('Ошибка загрузки KPI');
-      const json = await res.json();
-      setKpi(json);
-    } catch (e) {
-      setError?.(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [dateFrom, dateTo, setError]);
+  // ── Загрузка данных ──────────────────────────────────────────────────────
+  // const fetchReports = useCallback(async () => {
+  //   setLoading(true);
+  //   try {
+  //     const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+  //     const res = await fetch(`/api/reports?${params}`);
 
-  useEffect(() => {
-    fetchKPI();
-  }, [fetchKPI]);
+  //     if (!res.ok) {
+  //       const err = await res.json();
+  //       throw new Error(err.error || 'Ошибка загрузки отчёта');
+  //     }
 
-  // ── Рендер ──────────────────────────────────────────────────────────────
+  //     const json = await res.json();
+  //     setData(json);
+  //   } catch (e) {
+  //     setError?.(e.message);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // }, [dateFrom, dateTo, setError]);
+
+  // useEffect(() => {
+  //   fetchReports();
+  // }, [fetchReports]);
+
+  // ── Форматирование ───────────────────────────────────────────────────────
+  const formatMoney = (v) =>
+    new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v);
+
+  const summary = data?.summary;
+
+  // ── Рендер ───────────────────────────────────────────────────────────────
   return (
-    <div className="p-3 mt-4">
-      {/* Глобальные стили */}
+    <div className="p-3" style={{ height: '100%', overflow: 'auto' }}>
+      {/* Анимация shimmer */}
       <style>{`
         @keyframes shimmer {
           0%   { background-position: 200% 0; }
           100% { background-position: -200% 0; }
         }
-        @keyframes modalIn {
-          from { opacity: 0; transform: translateY(-16px) scale(.97); }
-          to   { opacity: 1; transform: none; }
-        }
       `}</style>
-
-      {/* ── Ряд 1: Объём, Стоимость, Сроки поставки ── */}
-      <div className="row g-3 mb-3">
-
-        {/* Объём закупленного сырья — кликабельный */}
-        <div className="col-12 col-lg-4">
-          <MetricCard
-            title="Объём закупленного сырья"
-            value={loading ? '' : formatMoney(kpi?.total_purchases_amount)}
-            icon="📦"
-            colorClass="text-primary"
-            subtitle={
-              kpi
-                ? `Поставщиков: ${kpi.supplier_count} · Оборачиваемость: ${formatNum(kpi.stock_turnover)}`
-                : 'за выбранный период'
-            }
-            clickable
-            loading={loading}
-            onClick={() => setShowVolumeModal(true)}
-          />
+  
+      {/* ── Заголовок ── */}
+      <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <div>
+          <h4 className="mb-0 fw-bold">📊 Отчёты</h4>
+          <span className="text-muted small">Сводная аналитика по закупкам</span>
         </div>
 
-        {/* Стоимость закупленного сырья — кликабельный */}
-        <div className="col-12 col-lg-4">
-          <MetricCard
-            title="Стоимость закупленного сырья"
-            value={loading ? '' : formatMoney(kpi?.stock_value)}
-            icon="💰"
-            colorClass="text-success"
-            subtitle={
-              kpi
-                ? `Расходы: ${formatMoney(kpi.total_expenses)}`
-                : 'стоимость на складе'
-            }
-            clickable
-            loading={loading}
-            onClick={() => setShowCostModal(true)}
-          />
+        {/* ── Кнопки переключения вкладок ── */}
+        <div className="d-flex gap-2">
+          <button
+            className={`btn btn-sm ${activeTab === 'summary' ? 'btn-primary' : 'btn-outline-primary'}`}
+            onClick={() => setActiveTab('summary')}
+          >
+            📈 Сводная аналитика
+          </button>
+          <button
+            className={`btn btn-sm ${activeTab === 'details' ? 'btn-primary' : 'btn-outline-primary'}`}
+            onClick={() => setActiveTab('details')}
+          >
+            📅 Сроки
+          </button>
         </div>
 
-        {/* Сроки поставки — календарь */}
-        <div className="col-12 col-lg-4" style={{ minHeight: 280 }}>
-          <MiniCalendar
-            title="Сроки поставки"
-            icon="🚚"
-            colorClass="text-warning"
-            eventType="delivery"
-          />
-        </div>
-      </div>
-
-      {/* ── Ряд 2: Сроки оплаты, Претензии, Задолженность ── */}
-      <div className="row g-3 mb-3">
-
-        {/* Сроки оплаты — календарь */}
-        <div className="col-12 col-lg-4" style={{ minHeight: 280 }}>
-          <MiniCalendar
-            title="Сроки оплаты"
-            icon="💳"
-            colorClass="text-primary"
-            eventType="payment"
-          />
-        </div>
-
-        {/* Количество претензий */}
-        <div className="col-12 col-lg-4">
-          <MetricCard
-            title="Количество претензий к поставщикам"
-            value={loading ? '' : (kpi?.shortage_count ?? '—')}
-            icon="⚠️"
-            colorClass="text-danger"
-            subtitle="случаев дефицита / претензий"
-            loading={loading}
-          />
-        </div>
-
-        {/* Уровень кредиторской задолженности */}
-        <div className="col-12 col-lg-4">
-          <MetricCard
-            title="Уровень кредиторской задолженности"
-            value={
-              loading
-                ? ''
-                : kpi?.payment_delay_avg != null
-                ? `${formatNum(kpi.payment_delay_avg)} дн.`
-                : '—'
-            }
-            icon="📋"
-            colorClass={
-              kpi?.payment_delay_avg > 5 ? 'text-danger' : 'text-warning'
-            }
-            subtitle="средняя задержка оплаты"
-            loading={loading}
-          />
+        {/* ── Фильтр дат ── */}
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <div className="input-group input-group-sm" style={{ width: 'auto' }}>
+            <span className="input-group-text bg-white">С</span>
+            <input
+              type="date"
+              className="form-control"
+              value={dateFrom}
+              max={dateTo}
+              onChange={(e) => setDateFrom(e.target.value)}
+            />
+          </div>
+          <div className="input-group input-group-sm" style={{ width: 'auto' }}>
+            <span className="input-group-text bg-white">По</span>
+            <input
+              type="date"
+              className="form-control"
+              value={dateTo}
+              min={dateFrom}
+              max={today}
+              onChange={(e) => setDateTo(e.target.value)}
+            />
+          </div>
+          <button
+            className="btn btn-primary btn-sm"
+            //onClick={fetchReports}
+            disabled={loading}
+          >
+            {loading ? (
+              <span className="spinner-border spinner-border-sm me-1" />
+            ) : '🔄'} Обновить
+          </button>
         </div>
       </div>
 
-      {/* ── Модальные окна ── */}
-      <PurchaseVolumeModal
-        show={showVolumeModal}
-        onClose={() => setShowVolumeModal(false)}
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-      />
 
-      <PurchaseCostModal
-        show={showCostModal}
-        onClose={() => setShowCostModal(false)}
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-      />
+      <div className="container-fluid rounded-3 text-bg-light mt-3 p-0 overflow-hidden">
+        {/* Содержимое вкладок */}
+        <div className="p-3">
+          {/* Вкладка 1: Сводная аналитика */}
+          {activeTab === 'summary' && (
+            <div>
+              <div className="row g-3 mb-4">
+                <div className="col-6 col-lg-4">
+                  <MetricCard
+                    title="Объем закупленного сырья"
+                    value={loading ? '...' : (summary?.contracts_count ?? '—')}
+                    icon="📄"
+                    colorClass="text-primary"
+                    subtitle="за выбранный период"
+                  />
+                </div>
+                <div className="col-6 col-lg-4">
+                  <MetricCard
+                    title="Стоимость закупленного сырья"
+                    value={loading ? '...' : (summary?.arrivals_count ?? '—')}
+                    icon="📦"
+                    colorClass="text-success"
+                    subtitle="поставок получено"
+                  />
+                </div>
+              </div>
+              <div className="row g-3">
+                <div className="col-6 col-lg-4">
+                  <MetricCard
+                    title="Количество претензий к поставщикам"
+                    value={loading ? '...' : (summary?.arrivals_count ?? '—')}
+                    icon="📦"
+                    colorClass="text-success"
+                    subtitle="поставок получено"
+                  />
+                </div>
+                <div className="col-6 col-lg-4">
+                  <MetricCard
+                    title="Уровень кредиторской задолженности"
+                    value={loading ? '...' : (summary ? formatMoney(summary.total_spent) : '—')}
+                    icon="💰"
+                    colorClass="text-warning"
+                    subtitle="общая сумма закупок"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Вкладка 2: Календарь сроков с левой панелью событий */}
+          {activeTab === 'details' && (
+            <div className="row g-3">
+              {/* Левая колонка - детали событий */}
+              <div className="col-md-5 col-lg-4">
+                <EventDetails 
+                  selectedDate={selectedDate} 
+                  events={calendarEvents} 
+                  loading={loading}
+                />
+              </div>
+              
+              {/* Правая колонка - календарь */}
+              <div className="col-md-7 col-lg-8 border border-1 border-dark p-1 rounded-1">
+                <Calendar 
+                  events={calendarEvents} 
+                  loading={loading}
+                  onDateSelect={setSelectedDate}
+                  selectedDate={selectedDate}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

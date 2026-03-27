@@ -20,7 +20,7 @@ func main() {
 		Host:     "localhost",
 		Port:     5432,
 		User:     "postgres",
-		Password: "123",
+		Password: "antivzlom",
 		DBName:   "kiskis",
 	}
 
@@ -106,7 +106,7 @@ func main() {
 		authGroup.GET("/accounting/summary", routes.GetAccountingSummary)
 
 
-		// Админские маршруты
+		//-------------------------Админские маршруты----------------------------
 		adminGroup := authGroup.Group("/admin")
 		adminGroup.Use(middleware.AdminMiddleware())
 		{
