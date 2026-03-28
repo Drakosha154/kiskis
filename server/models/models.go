@@ -76,6 +76,39 @@ type Documents struct {
 	Currency     string  `gorm:"default:RUB"`
 	Description  string
 	Created_at   time.Time
+	DeliveryDate *time.Time `gorm:"column:delivery_date"`  // Добавить в БД
+	DeadlineDate *time.Time `gorm:"column:deadline_date"`  // Добавить в БД
+	DeliveryDays *int       `gorm:"column:delivery_days"`  // Добавить в БД
+	ActualDeliveryDate *time.Time `gorm:"column:actual_delivery_date"`  // Добавить в БД
+}
+
+type Claim struct {
+	ID          uint      `gorm:"primaryKey"`
+	ClaimNumber string    `gorm:"not null;unique"`  // Номер претензии
+	DocumentID  int       `gorm:"not null"`          // ID документа прихода
+	VendorID    int       `gorm:"not null"`          // ID поставщика
+	ClaimDate   time.Time `gorm:"not null"`          // Дата претензии
+	ClaimType   string    `gorm:"not null"`          // Тип: брак, недопоставка, просрочка, несоответствие
+	Description string    `gorm:"type:text"`         // Описание проблемы
+	Amount      float64   `gorm:"default:0"`         // Сумма претензии
+	Status      string    `gorm:"default:'Новая'"`   // Статус: Новая, В работе, Удовлетворена, Отклонена
+	ResolvedAt  *time.Time                           // Дата удовлетворения/отклонения
+	Resolution  string    `gorm:"type:text"`         // Результат рассмотрения
+	CreatedBy   uint      `gorm:"not null"`          // Кто создал
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type ClaimItem struct {
+	ID         uint    `gorm:"primaryKey"`
+	ClaimID    int     `gorm:"not null"`   // ID претензии
+	ProductID  int     `gorm:"not null"`   // ID товара
+	Quantity   float64 `gorm:"not null"`   // Количество с браком/недостачей
+	Price      float64 `gorm:"default:0"`  // Цена товара
+	Amount     float64 `gorm:"default:0"`  // Сумма претензии по товару
+	IssueType  string  `gorm:"not null"`   // Тип проблемы: брак, недостача, повреждение
+	Description string `gorm:"type:text"`  // Детали по товару
+	CreatedAt  time.Time
 }
 
 type Document_Items struct {

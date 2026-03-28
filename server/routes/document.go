@@ -14,6 +14,7 @@ import (
 func NewDocument(c *gin.Context) {
 
 	userID := c.MustGet("userID").(uint) // Получаем ID пользователя из middleware
+	
 	var input struct {
 		Doc_number   string  `json:"doc_number" binding:"required"`
 		Doc_type     string  `json:"doc_type" binding:"required"`
@@ -22,6 +23,10 @@ func NewDocument(c *gin.Context) {
 		Status       string  `json:"status" binding:"required"`
 		Total_amount float64 `json:"total_amount" binding:"required"`
 		Description  string  `json:"description" binding:"required"`
+		// Опциональные поля, которые можно передать из фронтенда
+		DeliveryDate  *string `json:"delivery_date"`  // Может быть передан извне
+		DeadlineDate  *string `json:"deadline_date"`  // Может быть передан извне
+		DeliveryDays  *int    `json:"delivery_days"`  // Может быть передан извне
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -29,30 +34,100 @@ func NewDocument(c *gin.Context) {
 		return
 	}
 
-	document := models.Documents{
-		Doc_number:   input.Doc_number,
-		Doc_type:     input.Doc_type,
-		Doc_date:     input.Doc_date,
-		Vendor_id:    input.Vendor_id,
-		User_id:      userID,
-		Status:       input.Status,
-		Total_amount: input.Total_amount,
-		Description:  input.Description,
-		Created_at:   time.Now(),
+	// Парсим дату документа
+	var docDate time.Time
+	var err error
+	
+	if input.Doc_date != "" {
+		docDate, err = time.Parse("2006-01-02", input.Doc_date)
+		if err != nil {
+			// Если не удалось распарсить, используем текущую дату
+			docDate = time.Now()
+		}
+	} else {
+		docDate = time.Now()
 	}
 
-	// Сохраняем поставщика в БД
+	// 1. DeliveryDate - дата поставки
+	var deliveryDate *time.Time
+	if input.DeliveryDate != nil && *input.DeliveryDate != "" {
+		// Если передана конкретная дата поставки, используем её
+		parsedDate, err := time.Parse("2006-01-02", *input.DeliveryDate)
+		if err == nil {
+			deliveryDate = &parsedDate
+		}
+	}
+	
+	// Если дата поставки не задана, ставим текущее время + 7 дней (по умолчанию)
+	if deliveryDate == nil {
+		defaultDelivery := docDate.AddDate(0, 0, 7)
+		deliveryDate = &defaultDelivery
+	}
+
+	// 2. DeadlineDate - дедлайн (срок оплаты/исполнения)
+	var deadlineDate *time.Time
+	if input.DeadlineDate != nil && *input.DeadlineDate != "" {
+		// Если передан конкретный дедлайн, используем его
+		parsedDate, err := time.Parse("2006-01-02", *input.DeadlineDate)
+		if err == nil {
+			deadlineDate = &parsedDate
+		}
+	}
+	
+	// Если дедлайн не задан, ставим 30 дней от даты документа
+	if deadlineDate == nil {
+		defaultDeadline := docDate.AddDate(0, 0, 30)
+		deadlineDate = &defaultDeadline
+	}
+
+	// 3. DeliveryDays - срок поставки в днях (рассчитываем автоматически)
+	var deliveryDays *int
+	if input.DeliveryDays != nil && *input.DeliveryDays > 0 {
+		// Если передан явно, используем переданное значение
+		deliveryDays = input.DeliveryDays
+	} else if deliveryDate != nil {
+		// Рассчитываем как разницу между датой поставки и датой документа
+		days := int(deliveryDate.Sub(docDate).Hours() / 24)
+		if days >= 0 {
+			deliveryDays = &days
+		}
+	}
+
+	// Если всё ещё не задано, ставим значение по умолчанию
+	if deliveryDays == nil {
+		defaultDays := 7
+		deliveryDays = &defaultDays
+	}
+
+	document := models.Documents{
+		Doc_number:        input.Doc_number,
+		Doc_type:          input.Doc_type,
+		Doc_date:          docDate.Format("2006-01-02"),
+		Vendor_id:         input.Vendor_id,
+		User_id:           userID,
+		Status:            input.Status,
+		Total_amount:      input.Total_amount,
+		Description:       input.Description,
+		Created_at:        time.Now(),
+		DeliveryDate:      deliveryDate,
+		DeadlineDate:      deadlineDate,
+		DeliveryDays:      deliveryDays,
+	}
+
+	// Сохраняем документ в БД
 	if err := database.DB.Create(&document).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create documents"})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":    "Documents registered successfully",
-		"id":         document.ID,
-		"doc_number": document.Doc_number,
+		"message":        "Documents registered successfully",
+		"id":             document.ID,
+		"doc_number":     document.Doc_number,
+		"delivery_date":  document.DeliveryDate,
+		"deadline_date":  document.DeadlineDate,
+		"delivery_days":  document.DeliveryDays,
 	})
-
 }
 
 func GetDocuments(c *gin.Context) {
@@ -127,6 +202,11 @@ func UpdDocumentByID(c *gin.Context) {
 		Status       string  `json:"status" binding:"required"`
 		Total_amount float64 `json:"total_amount" binding:"required"`
 		Description  string  `json:"description" binding:"required"`
+		// Поля для обновления сроков
+		DeliveryDate  *string `json:"delivery_date"`
+		DeadlineDate  *string `json:"deadline_date"`
+		DeliveryDays  *int    `json:"delivery_days"`
+		ActualDeliveryDate *string `json:"actual_delivery_date"` // Фактическая дата поставки
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -140,6 +220,13 @@ func UpdDocumentByID(c *gin.Context) {
 		return
 	}
 
+	// Парсим дату документа для пересчёта сроков
+	docDate, _ := time.Parse("2006-01-02", input.Doc_date)
+	if input.Doc_date == "" {
+		docDate, _ = time.Parse("2006-01-02", document.Doc_date)
+	}
+
+	// Подготавливаем обновления
 	updates := models.Documents{
 		Doc_number:   input.Doc_number,
 		Doc_type:     input.Doc_type,
@@ -151,15 +238,153 @@ func UpdDocumentByID(c *gin.Context) {
 		Description:  input.Description,
 	}
 
+	// Обновляем DeliveryDate если передана
+	if input.DeliveryDate != nil && *input.DeliveryDate != "" {
+		parsedDate, err := time.Parse("2006-01-02", *input.DeliveryDate)
+		if err == nil {
+			updates.DeliveryDate = &parsedDate
+		}
+	} else if input.DeliveryDate != nil && *input.DeliveryDate == "" {
+		// Если передана пустая строка, оставляем как есть
+		updates.DeliveryDate = document.DeliveryDate
+	}
+
+	// Обновляем DeadlineDate если передана
+	if input.DeadlineDate != nil && *input.DeadlineDate != "" {
+		parsedDate, err := time.Parse("2006-01-02", *input.DeadlineDate)
+		if err == nil {
+			updates.DeadlineDate = &parsedDate
+		}
+	} else if input.DeadlineDate != nil && *input.DeadlineDate == "" {
+		updates.DeadlineDate = document.DeadlineDate
+	}
+
+	// Обновляем DeliveryDays если передан
+	if input.DeliveryDays != nil {
+		updates.DeliveryDays = input.DeliveryDays
+	} else if updates.DeliveryDate != nil {
+		// Пересчитываем на основе новой даты поставки
+		days := int(updates.DeliveryDate.Sub(docDate).Hours() / 24)
+		if days >= 0 {
+			updates.DeliveryDays = &days
+		}
+	}
+
+	// Обновляем фактическую дату поставки
+	if input.ActualDeliveryDate != nil {
+		if *input.ActualDeliveryDate != "" {
+			parsedDate, err := time.Parse("2006-01-02", *input.ActualDeliveryDate)
+			if err == nil {
+				updates.ActualDeliveryDate = &parsedDate
+			}
+		} else {
+			updates.ActualDeliveryDate = nil
+		}
+	}
+
+	if err := database.DB.Model(&document).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update document"})
+		return
+	}
+
+	// Получаем обновлённый документ
+	var updatedDocument models.Documents
+	database.DB.First(&updatedDocument, id)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Document updated successfully",
+		"id":      id,
+		"data":    updatedDocument,
+	})
+}
+
+// Вспомогательная функция для обновления статуса документа на основе фактической даты поставки
+func UpdateDocumentStatusOnDelivery(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid document ID"})
+		return
+	}
+
+	var input struct {
+		ActualDeliveryDate string `json:"actual_delivery_date" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var document models.Documents
+	if err := database.DB.First(&document, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+		return
+	}
+
+	parsedDate, err := time.Parse("2006-01-02", input.ActualDeliveryDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format"})
+		return
+	}
+
+	updates := map[string]interface{}{
+		"actual_delivery_date": parsedDate,
+	}
+
+	// Проверяем, была ли поставка вовремя
+	if document.DeliveryDate != nil {
+		if parsedDate.Before(*document.DeliveryDate) || parsedDate.Equal(*document.DeliveryDate) {
+			updates["status"] = "Выполнен вовремя"
+		} else {
+			updates["status"] = "Просрочен"
+		}
+	} else {
+		updates["status"] = "Выполнен"
+	}
+
 	if err := database.DB.Model(&document).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update document"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Document updated successfully",
+		"message": "Delivery status updated successfully",
 		"id":      id,
-		"data":    updates,
+		"status":  updates["status"],
+	})
+}
+
+// Функция для автоматического обновления статусов просроченных документов (можно вызывать по расписанию)
+func UpdateOverdueDocuments(c *gin.Context) {
+	today := time.Now()
+
+	// Находим все документы с истекшим дедлайном, которые ещё не завершены
+	var overdueDocuments []models.Documents
+	database.DB.
+		Where("deadline_date IS NOT NULL AND deadline_date < ? AND status NOT IN (?)", 
+			today, []string{"Завершён", "Оплачен", "Просрочен"}).
+		Find(&overdueDocuments)
+
+	for _, doc := range overdueDocuments {
+		database.DB.Model(&doc).Update("status", "Просрочен")
+	}
+
+	// Находим документы с истекшей датой поставки
+	var overdueDeliveries []models.Documents
+	database.DB.
+		Where("delivery_date IS NOT NULL AND delivery_date < ? AND actual_delivery_date IS NULL AND status NOT IN (?)",
+			today, []string{"Просрочен", "Завершён"}).
+		Find(&overdueDeliveries)
+
+	for _, doc := range overdueDeliveries {
+		database.DB.Model(&doc).Update("status", "Просрочена поставка")
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":                "Overdue documents updated",
+		"overdue_documents":      len(overdueDocuments),
+		"overdue_deliveries":     len(overdueDeliveries),
 	})
 }
 
@@ -221,10 +446,21 @@ func NewDocumentProduct(c *gin.Context) {
 
 	tx.Commit()
 
+	// Пересчитываем общую сумму документа
+	var total float64
+	database.DB.
+		Table("document_items").
+		Where("document_id = ?", input.DocumentID).
+		Select("COALESCE(SUM(quantity * price), 0)").
+		Scan(&total)
+
+	database.DB.Model(&document).Update("total_amount", total)
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message":     "Document items created successfully",
 		"document_id": input.DocumentID,
 		"items_count": len(input.Items),
+		"total":       total,
 	})
 }
 
@@ -386,6 +622,16 @@ func UpdateDocumentProduct(c *gin.Context) {
 		return
 	}
 
+	// Пересчитываем общую сумму документа
+	var total float64
+	database.DB.
+		Table("document_items").
+		Where("document_id = ?", item.DocumentID).
+		Select("COALESCE(SUM(quantity * price), 0)").
+		Scan(&total)
+
+	database.DB.Model(&models.Documents{}).Where("id = ?", item.DocumentID).Update("total_amount", total)
+
 	// Получаем обновленный товар с данными о продукте
 	type DocumentItemResponse struct {
 		ID             uint    `json:"id"`
@@ -421,6 +667,7 @@ func UpdateDocumentProduct(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Document item updated successfully",
 		"item":    updatedItem,
+		"total":   total,
 	})
 }
 
@@ -440,13 +687,26 @@ func DeleteDocumentProduct(c *gin.Context) {
 		return
 	}
 
+	documentID := item.DocumentID
+
 	if err := database.DB.Delete(&item).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete document item"})
 		return
 	}
 
+	// Пересчитываем общую сумму документа
+	var total float64
+	database.DB.
+		Table("document_items").
+		Where("document_id = ?", documentID).
+		Select("COALESCE(SUM(quantity * price), 0)").
+		Scan(&total)
+
+	database.DB.Model(&models.Documents{}).Where("id = ?", documentID).Update("total_amount", total)
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Document item deleted successfully",
 		"id":      id,
+		"total":   total,
 	})
 }

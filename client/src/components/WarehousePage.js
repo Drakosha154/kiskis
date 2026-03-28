@@ -36,9 +36,19 @@ function WarehousePage({ setError }) {
   const [selectedContract, setSelectedContract] = useState(null);
   const [contractProducts, setContractProducts] = useState([]);
   const [activeTab, setActiveTab] = useState('contracts');
+
+  // Состояния для претензий
+  const [showClaimModal, setShowClaimModal] = useState(false);
+  const [claimData, setClaimData] = useState({
+    claim_type: 'shortage',
+    description: '',
+    amount: 0,
+    items: []
+  });
+  const [receiptDocumentId, setReceiptDocumentId] = useState(null);
   
   // Состояния для приёмки
-  const [receiptStep, setReceiptStep] = useState(1); // 1: выбор договора, 2: приёмка
+  const [receiptStep, setReceiptStep] = useState(1);
   const [receivedItems, setReceivedItems] = useState([]);
   const [discrepancies, setDiscrepancies] = useState([]);
   const [receiptNotes, setReceiptNotes] = useState('');
@@ -85,64 +95,57 @@ function WarehousePage({ setError }) {
   }, [products, searchTerm, categoryFilter, stockFilter, sortConfig]);
 
   const fetchProducts = async () => {
-  setLoading(true);
-  const token = localStorage.getItem('token');
-  try {
-    // Загружаем товары
-    const productsResponse = await fetch('http://localhost:8080/api/products', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    if (!productsResponse.ok) throw new Error('Failed to fetch products');
-    const productsData = await productsResponse.json();
-    
-    // Загружаем остатки со склада
-    const storageResponse = await fetch('http://localhost:8080/api/storage', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    if (!storageResponse.ok) {
-      console.error('Storage response error:', await storageResponse.text());
-      throw new Error('Failed to fetch storage');
-    }
-    const storageData = await storageResponse.json();
-    
-    
-    // Создаем мапу для быстрого доступа к остаткам
-    const storageMap = {};
-    if (storageData.storage && Array.isArray(storageData.storage)) {
-      storageData.storage.forEach(item => {
-        // Проверяем, какое имя поля приходит от сервера
-        const productId = item.product_id || item.Product_id || item.ID;
-        if (productId) {
-          storageMap[productId] = item.quantity || item.Quantity || 0;
-        }
+    setLoading(true);
+    const token = localStorage.getItem('token');
+    try {
+      const productsResponse = await fetch('http://localhost:8080/api/products', {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      if (!productsResponse.ok) throw new Error('Failed to fetch products');
+      const productsData = await productsResponse.json();
+      
+      const storageResponse = await fetch('http://localhost:8080/api/storage', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!storageResponse.ok) {
+        console.error('Storage response error:', await storageResponse.text());
+        throw new Error('Failed to fetch storage');
+      }
+      const storageData = await storageResponse.json();
+      
+      const storageMap = {};
+      if (storageData.storage && Array.isArray(storageData.storage)) {
+        storageData.storage.forEach(item => {
+          const productId = item.product_id || item.Product_id || item.ID;
+          if (productId) {
+            storageMap[productId] = item.quantity || item.Quantity || 0;
+          }
+        });
+      }
+      
+      const productsWithStock = (productsData.products || []).map(p => ({
+        ...p,
+        ID: p.ID,
+        Article: p.Article,
+        Name: p.Name,
+        Description: p.Description,
+        Category: p.Category,
+        Unit: p.Unit,
+        min_stock: p.Min_stock || 0,
+        current_stock: storageMap[p.ID] || 0,
+        price: p.price || 0,
+        location: p.location || 'Не указано'
+      }));
+      setProducts(productsWithStock);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setError('Ошибка загрузки данных склада: ' + error.message);
+    } finally {
+      setLoading(false);
     }
-    
-    
-    // Объединяем данные
-    const productsWithStock = (productsData.products || []).map(p => ({
-      ...p,
-      ID: p.ID,
-      Article: p.Article,
-      Name: p.Name,
-      Description: p.Description,
-      Category: p.Category,
-      Unit: p.Unit,
-      min_stock: p.Min_stock || 0,
-      current_stock: storageMap[p.ID] || 0, // Берем из storage
-      price: p.price || 0,
-      location: p.location || 'Не указано'
-    }));
-    setProducts(productsWithStock);
-  } catch (error) {
-    console.error('Error fetching data:', error);
-    setError('Ошибка загрузки данных склада: ' + error.message);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const fetchContracts = async () => {
     const token = localStorage.getItem('token');
@@ -154,7 +157,6 @@ function WarehousePage({ setError }) {
       if (!response.ok) throw new Error('Failed to fetch documents');
       const data = await response.json();
       
-      // Фильтруем только договоры (doc_type = 'Договор')
       const contractsList = (data.documents || []).filter(doc => doc.Doc_type === 'Договор' && doc.Status !== 'Завершён');
       setContracts(contractsList);
     } catch (error) {
@@ -163,35 +165,33 @@ function WarehousePage({ setError }) {
   };
 
   const fetchDocumentProducts = async (documentId) => {
-  const token = localStorage.getItem('token');
-  try {
-    const response = await fetch(`http://localhost:8080/api/document-products/${documentId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    if (!response.ok) throw new Error('Failed to fetch document products');
-    const data = await response.json();
-    
-    // Преобразуем данные для отображения
-    // Все данные о продукте (name, sku, unit) уже приходят из JOIN запроса
-    const products = (data.items || []).map(item => ({
-      id: item.id,
-      product_id: item.product_id,
-      product_name: item.product_name,
-      product_article: item.product_article,
-      vendor_price: item.price,
-      quantity: item.quantity,
-      unit: item.unit,
-      expected_quantity: item.quantity, // По умолчанию ожидаем столько, сколько в договоре
-      received_quantity: 0
-    }));
-    
-    return products;
-  } catch (error) {
-    setError('Ошибка загрузки товаров документа');
-    return [];
-  }
-};
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`http://localhost:8080/api/document-products/${documentId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch document products');
+      const data = await response.json();
+      
+      const products = (data.items || []).map(item => ({
+        id: item.id,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        product_article: item.product_article,
+        vendor_price: item.price,
+        quantity: item.quantity,
+        unit: item.unit,
+        expected_quantity: item.quantity,
+        received_quantity: 0
+      }));
+      
+      return products;
+    } catch (error) {
+      setError('Ошибка загрузки товаров документа');
+      return [];
+    }
+  };
 
   const fetchContractProducts = async (vendorId) => {
     const token = localStorage.getItem('token');
@@ -202,9 +202,7 @@ function WarehousePage({ setError }) {
       
       if (!response.ok) throw new Error('Failed to fetch vendor products');
       const data = await response.json();
-
       
-      // Преобразуем данные для отображения
       const products = (data.vendorProducts || []).map(vp => ({
         id: vp.id,
         product_id: vp.product_id,
@@ -217,7 +215,6 @@ function WarehousePage({ setError }) {
         received_quantity: 0,
         unit: 'шт'
       }));
-
       
       setContractProducts(products);
     } catch (error) {
@@ -261,20 +258,16 @@ function WarehousePage({ setError }) {
     setFilteredProducts(result);
   };
 
-const handleSelectContract = async (contract) => {
-  setSelectedContract(contract);
-  
-  // Загружаем товары из document_items
-  const products = await fetchDocumentProducts(contract.ID);
-  setContractProducts(products);
-  
-  setActiveTab('products');
-};
+  const handleSelectContract = async (contract) => {
+    setSelectedContract(contract);
+    const products = await fetchDocumentProducts(contract.ID);
+    setContractProducts(products);
+    setActiveTab('products');
+  };
 
   const handleStartReceipt = () => {
     if (!selectedContract) return;
     
-    // Инициализируем список принимаемых товаров
     const initialItems = contractProducts.map(cp => ({
       ...cp,
       expected_quantity: cp.expected_quantity || 0,
@@ -290,7 +283,6 @@ const handleSelectContract = async (contract) => {
     const updated = [...receivedItems];
     updated[index][field] = parseFloat(value) || 0;
     
-    // Проверяем на расхождения
     if (updated[index].expected_quantity !== updated[index].received_quantity) {
       if (!discrepancies.find(d => d.index === index)) {
         setDiscrepancies([...discrepancies, { 
@@ -305,133 +297,195 @@ const handleSelectContract = async (contract) => {
     setReceivedItems(updated);
   };
 
- const handleCompleteReceipt = async () => {
-  const token = localStorage.getItem('token');
-  
-  try {
-    setLoading(true);
-    
-    // 1. Создаём документ прихода
-    const receiptDoc = {
-      doc_number: `PR-${Date.now()}`,
-      doc_type: 'Приход',
-      vendor_id: selectedContract.Vendor_id,
-      status: discrepancies.length > 0 ? 'Расхождение' : 'Завершён',
-      total_amount: calculateTotalAmount(),
-      description: `Приход товаров по договору ${selectedContract.Doc_number}\n${receiptNotes}`
-    };
+  const calculateTotalAmount = () => {
+    return receivedItems.reduce((sum, item) => sum + (item.received_quantity * (item.vendor_price || 0)), 0);
+  };
 
-    const docResponse = await fetch('http://localhost:8080/api/documents', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(receiptDoc)
-    });
+  const calculateShortageAmount = () => {
+    return receivedItems.reduce((sum, item) => {
+      if (item.received_quantity < item.expected_quantity) {
+        const shortage = item.expected_quantity - item.received_quantity;
+        return sum + (shortage * (item.vendor_price || 0));
+      }
+      return sum;
+    }, 0);
+  };
 
-    if (!docResponse.ok) {
-      const errorData = await docResponse.json();
-      throw new Error(errorData.error || 'Failed to create receipt document');
-    }
-    
-    const docResult = await docResponse.json();
-    setReceiptDocument(docResult);
-
-    // 2. Подготавливаем данные для массового обновления склада
-    const itemsToUpdate = receivedItems.filter(item => item.received_quantity > 0);
-    
-    if (itemsToUpdate.length > 0) {
-      const bulkUpdateData = {
-        items: itemsToUpdate.map(item => ({
-          product_id: item.product_id,
-          quantity: item.received_quantity,
-          price: item.vendor_price || 0
-        })),
-        document_id: docResult.id,
-        document_type: 'Приход',
-        vendor_id: selectedContract.Vendor_id
-      };
-
-      // 3. Обновляем остатки на складе (mass update)
-      const storageResponse = await fetch('http://localhost:8080/api/storage/bulk-update', {
+  const handleCreateClaim = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      setLoading(true);
+      
+      const shortageItems = receivedItems.filter(item => item.received_quantity < item.expected_quantity);
+      
+      const response = await fetch('http://localhost:8080/api/claims', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(bulkUpdateData)
+        body: JSON.stringify({
+          document_id: receiptDocumentId,
+          claim_type: claimData.claim_type,
+          description: claimData.description,
+          amount: claimData.amount,
+          items: shortageItems.map(item => ({
+            product_id: item.product_id,
+            quantity: item.expected_quantity - item.received_quantity,
+            price: item.vendor_price || 0,
+            issue_type: claimData.claim_type === 'shortage' ? 'shortage' : 'defect',
+            description: `Недопоставка: ожидалось ${item.expected_quantity}, получено ${item.received_quantity}`
+          }))
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create claim');
+      }
+      
+      const result = await response.json();
+      alert(`Претензия ${result.claim_number} создана успешно!`);
+      setShowClaimModal(false);
+      
+      // Обновляем данные
+      await fetchProducts();
+      await fetchContracts();
+      
+    } catch (error) {
+      setError('Ошибка при создании претензии: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompleteReceipt = async () => {
+    const token = localStorage.getItem('token');
+    
+    try {
+      setLoading(true);
+      
+      // 1. Создаём документ прихода
+      const receiptDoc = {
+        doc_number: `PR-${Date.now()}`,
+        doc_type: 'Приход',
+        vendor_id: selectedContract.Vendor_id,
+        status: discrepancies.length > 0 ? 'Принят с расхождениями' : 'Завершён',
+        total_amount: calculateTotalAmount(),
+        description: `Приход товаров по договору ${selectedContract.Doc_number}\n${receiptNotes}`
+      };
+
+      const docResponse = await fetch('http://localhost:8080/api/documents', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(receiptDoc)
       });
 
-      if (!storageResponse.ok) {
-        const errorText = await storageResponse.text();
-        console.error('Storage update error:', errorText);
-        let errorMessage = 'Failed to update storage';
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.error || errorMessage;
-        } catch (e) {
-          // Ignore parsing error
+      if (!docResponse.ok) {
+        const errorData = await docResponse.json();
+        throw new Error(errorData.error || 'Failed to create receipt document');
+      }
+      
+      const docResult = await docResponse.json();
+      setReceiptDocument(docResult);
+      setReceiptDocumentId(docResult.id);
+
+      // 2. Подготавливаем данные для массового обновления склада
+      const itemsToUpdate = receivedItems.filter(item => item.received_quantity > 0);
+      
+      if (itemsToUpdate.length > 0) {
+        const bulkUpdateData = {
+          items: itemsToUpdate.map(item => ({
+            product_id: item.product_id,
+            quantity: item.received_quantity,
+            price: item.vendor_price || 0
+          })),
+          document_id: docResult.id,
+          document_type: 'Приход',
+          vendor_id: selectedContract.Vendor_id
+        };
+
+        const storageResponse = await fetch('http://localhost:8080/api/storage/bulk-update', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(bulkUpdateData)
+        });
+
+        if (!storageResponse.ok) {
+          const errorText = await storageResponse.text();
+          console.error('Storage update error:', errorText);
+          throw new Error('Failed to update storage');
         }
-        throw new Error(errorMessage);
       }
 
-      const storageResult = await storageResponse.json();
+      // 3. Обновляем статус договора
+      if (discrepancies.length > 0) {
+        await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            doc_number: selectedContract.Doc_number,
+            doc_type: selectedContract.Doc_type,
+            vendor_id: selectedContract.Vendor_id,
+            status: 'Частично исполнен',
+            total_amount: selectedContract.Total_amount,
+            description: `${selectedContract.Description || ''}\n\nПриёмка завершена с расхождениями. Создан документ: ${receiptDoc.doc_number}`
+          })
+        });
+        
+        // Подготавливаем данные для претензии
+        const shortageItems = receivedItems.filter(item => item.received_quantity < item.expected_quantity);
+        setClaimData({
+          claim_type: 'shortage',
+          description: `Недопоставка по договору ${selectedContract.Doc_number}. ${shortageItems.map(i => `${i.product_name}: ожидалось ${i.expected_quantity}, получено ${i.received_quantity}`).join(', ')}`,
+          amount: calculateShortageAmount(),
+          items: shortageItems
+        });
+        
+        // Закрываем модальное окно приёмки и открываем окно создания претензии
+        setShowReceiveModal(false);
+        setShowClaimModal(true);
+        
+      } else {
+        await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            doc_number: selectedContract.Doc_number,
+            doc_type: selectedContract.Doc_type,
+            vendor_id: selectedContract.Vendor_id,
+            status: 'Исполнен',
+            total_amount: selectedContract.Total_amount,
+            description: selectedContract.Description || ''
+          })
+        });
+        
+        await fetchProducts();
+        await fetchContracts();
+        window.dispatchEvent(new CustomEvent('balanceUpdate'));
+        alert(`Приёмка завершена. Создан документ: ${receiptDoc.doc_number}`);
+        handleCloseReceiveModal();
+      }
+      
+    } catch (error) {
+      console.error('Receipt error:', error);
+      setError('Ошибка при оформлении приёмки: ' + error.message);
+    } finally {
+      setLoading(false);
     }
-
-    // 4. Если есть расхождения, обновляем статус договора
-    if (discrepancies.length > 0) {
-      await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          doc_number: selectedContract.Doc_number,
-          doc_type: selectedContract.Doc_type,
-          vendor_id: selectedContract.Vendor_id,
-          status: 'Частично исполнен',
-          total_amount: selectedContract.Total_amount,
-          description: `${selectedContract.Description}\n\nОбнаружены расхождения при приёмке: ${discrepancies.map(d => d.productName).join(', ')}`
-        })
-      });
-    } else {
-      await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          doc_number: selectedContract.Doc_number,
-          doc_type: selectedContract.Doc_type,
-          vendor_id: selectedContract.Vendor_id,
-          status: 'Исполнен',
-          total_amount: selectedContract.Total_amount,
-          description: selectedContract.Description
-        })
-      });
-    }
-
-    // 5. Обновляем данные на странице
-    await fetchProducts();
-    await fetchContracts();
-    
-    // 6. ОБНОВЛЯЕМ БАЛАНС В НАВБАРЕ
-    // Вызываем событие для обновления баланса
-    window.dispatchEvent(new CustomEvent('balanceUpdate'));
-    
-    alert(`Приёмка завершена. Создан документ: ${receiptDoc.doc_number}`);
-    handleCloseReceiveModal();
-    
-  } catch (error) {
-    console.error('Receipt error:', error);
-    setError('Ошибка при оформлении приёмки: ' + error.message);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleCloseReceiveModal = () => {
     setShowReceiveModal(false);
@@ -442,6 +496,7 @@ const handleSelectContract = async (contract) => {
     setDiscrepancies([]);
     setReceiptNotes('');
     setReceiptDocument(null);
+    setReceiptDocumentId(null);
     setActiveTab('contracts');
   };
 
@@ -562,78 +617,67 @@ const handleSelectContract = async (contract) => {
     }
   };
 
-const handleStockMovement = async () => {
-  const token = localStorage.getItem('token');
-  try {
-    setLoading(true);
-    
-    // Создаём документ движения
-    const movementDoc = {
-      doc_number: `MOV-${Date.now()}`,
-      doc_type: stockMovement.type === 'income' ? 'Приход' : 'Расход',
-      vendor_id: 0,
-      status: 'Завершён',
-      total_amount: stockMovement.quantity * (selectedProduct.price || 0),
-      description: `${stockMovement.type === 'income' ? 'Приход' : 'Расход'}: ${stockMovement.quantity} ${selectedProduct.Unit}. ${stockMovement.reason}`
-    };
+  const handleStockMovement = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      setLoading(true);
+      
+      const movementDoc = {
+        doc_number: `MOV-${Date.now()}`,
+        doc_type: stockMovement.type === 'income' ? 'Приход' : 'Расход',
+        vendor_id: 0,
+        status: 'Завершён',
+        total_amount: stockMovement.quantity * (selectedProduct.price || 0),
+        description: `${stockMovement.type === 'income' ? 'Приход' : 'Расход'}: ${stockMovement.quantity} ${selectedProduct.Unit}. ${stockMovement.reason}`
+      };
 
-    const docResponse = await fetch('http://localhost:8080/api/documents', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(movementDoc)
-    });
+      const docResponse = await fetch('http://localhost:8080/api/documents', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(movementDoc)
+      });
 
-    if (!docResponse.ok) {
-      const errorData = await docResponse.json();
-      throw new Error(errorData.error || 'Failed to create movement document');
-    }
-
-    const docResult = await docResponse.json();
-
-    // Обновляем остаток на складе
-    const storageUpdateData = {
-      product_id: selectedProduct.ID,
-      quantity: stockMovement.quantity,
-      operation: stockMovement.type,
-      document_id: docResult.id,
-      document_type: stockMovement.type === 'income' ? 'Приход' : 'Расход'
-    };
-
-    const storageResponse = await fetch('http://localhost:8080/api/storage/update', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(storageUpdateData)
-    });
-
-    if (!storageResponse.ok) {
-      const errorText = await storageResponse.text();
-      console.error('Storage update error:', errorText);
-      let errorMessage = 'Failed to update storage';
-      try {
-        const errorData = JSON.parse(errorText);
-        errorMessage = errorData.error || errorMessage;
-      } catch (e) {
-        // Ignore parsing error
+      if (!docResponse.ok) {
+        const errorData = await docResponse.json();
+        throw new Error(errorData.error || 'Failed to create movement document');
       }
-      throw new Error(errorMessage);
-    }
 
-    await fetchProducts();
-    setShowStockModal(false);
-    
-  } catch (error) {
-    console.error('Stock movement error:', error);
-    setError('Ошибка при движении товара: ' + error.message);
-  } finally {
-    setLoading(false);
-  }
-};
+      const docResult = await docResponse.json();
+
+      const storageUpdateData = {
+        product_id: selectedProduct.ID,
+        quantity: stockMovement.quantity,
+        operation: stockMovement.type,
+        document_id: docResult.id,
+        document_type: stockMovement.type === 'income' ? 'Приход' : 'Расход'
+      };
+
+      const storageResponse = await fetch('http://localhost:8080/api/storage/update', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(storageUpdateData)
+      });
+
+      if (!storageResponse.ok) {
+        throw new Error('Failed to update storage');
+      }
+
+      await fetchProducts();
+      setShowStockModal(false);
+      
+    } catch (error) {
+      console.error('Stock movement error:', error);
+      setError('Ошибка при движении товара: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const resetForm = () => {
     setFormData({
@@ -647,10 +691,6 @@ const handleStockMovement = async () => {
       price: 0,
       location: ''
     });
-  };
-
-  const calculateTotalAmount = () => {
-    return receivedItems.reduce((sum, item) => sum + (item.received_quantity * (item.vendor_price || 0)), 0);
   };
 
   const getStockStatus = (current, min) => {
@@ -864,8 +904,8 @@ const handleStockMovement = async () => {
         </Card.Body>
       </Card>
 
-      {/* Модальное окно приёмки товара */}
-<Modal show={showReceiveModal} onHide={handleCloseReceiveModal} size="xl">
+      {/* Модальное окно приёмки товара - остаётся без изменений */}
+      <Modal show={showReceiveModal} onHide={handleCloseReceiveModal} size="xl">
   <Modal.Header closeButton>
     <Modal.Title>
       {receiptStep === 1 && 'Выбор договора для приёмки'}
@@ -1145,6 +1185,97 @@ const handleStockMovement = async () => {
               {loading ? 'Обработка...' : 'Завершить приёмку'}
             </Button>
           )}
+        </Modal.Footer>
+      </Modal>
+
+      {/* Модальное окно создания претензии */}
+      <Modal show={showClaimModal} onHide={() => setShowClaimModal(false)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>⚠️ Создание претензии поставщику</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Alert variant="warning">
+            <strong>Обнаружены расхождения при приёмке!</strong>
+            <br />
+            Сумма недопоставки: {formatNumber(calculateShortageAmount())} ₽
+          </Alert>
+          
+          <Form>
+            <Form.Group className="mb-3">
+              <Form.Label>Тип претензии</Form.Label>
+              <Form.Select
+                value={claimData.claim_type}
+                onChange={(e) => setClaimData({...claimData, claim_type: e.target.value})}
+              >
+                <option value="shortage">Недопоставка</option>
+                <option value="defect">Брак</option>
+                <option value="damage">Повреждение</option>
+                <option value="mismatch">Несоответствие</option>
+              </Form.Select>
+            </Form.Group>
+            
+            <Form.Group className="mb-3">
+              <Form.Label>Описание претензии</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={4}
+                value={claimData.description}
+                onChange={(e) => setClaimData({...claimData, description: e.target.value})}
+                placeholder="Подробно опишите причину претензии..."
+              />
+            </Form.Group>
+            
+            <Form.Group className="mb-3">
+              <Form.Label>Сумма претензии (₽)</Form.Label>
+              <Form.Control
+                type="number"
+                value={claimData.amount}
+                onChange={(e) => setClaimData({...claimData, amount: parseFloat(e.target.value) || 0})}
+                step="0.01"
+              />
+              <Form.Text className="text-muted">
+                Сумма недопоставки: {formatNumber(calculateShortageAmount())} ₽
+              </Form.Text>
+            </Form.Group>
+            
+            <h6>Товары с расхождениями:</h6>
+            <Table size="sm" bordered>
+              <thead>
+                <tr>
+                  <th>Товар</th>
+                  <th>Ожидалось</th>
+                  <th>Получено</th>
+                  <th>Недопоставка</th>
+                  <th>Сумма</th>
+                </tr>
+              </thead>
+              <tbody>
+                {receivedItems.filter(item => item.received_quantity < item.expected_quantity).map((item, idx) => {
+                  const shortage = item.expected_quantity - item.received_quantity;
+                  return (
+                    <tr key={idx}>
+                      <td>{item.product_name}</td>
+                      <td className="text-center">{item.expected_quantity}</td>
+                      <td className="text-center text-danger">{item.received_quantity}</td>
+                      <td className="text-center">{shortage}</td>
+                      <td className="text-end">{formatNumber(shortage * (item.vendor_price || 0))} ₽</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => {
+            setShowClaimModal(false);
+            handleCloseReceiveModal();
+          }}>
+            Создать претензию позже
+          </Button>
+          <Button variant="danger" onClick={handleCreateClaim} disabled={loading}>
+            {loading ? 'Создание...' : 'Создать претензию'}
+          </Button>
         </Modal.Footer>
       </Modal>
 

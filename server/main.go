@@ -20,7 +20,7 @@ func main() {
 		Host:     "localhost",
 		Port:     5432,
 		User:     "postgres",
-		Password: "antivzlom",
+		Password: "123",
 		DBName:   "kiskis",
 	}
 
@@ -104,6 +104,23 @@ func main() {
 		authGroup.GET("/money", routes.GetMoney)
 		authGroup.GET("/accounting/operations", routes.GetAccountingOperations)
 		authGroup.GET("/accounting/summary", routes.GetAccountingSummary)
+
+		// Отчёты
+		authGroup.GET("/reports/summary", routes.GetReportsSummary)
+		authGroup.GET("/reports/calendar-events", routes.GetReportsCalendarEvents)
+		authGroup.GET("/reports/purchased-products", routes.GetPurchasedProducts)
+		authGroup.GET("/reports/purchase-cost", routes.GetPurchaseCostDetail)
+		authGroup.GET("/reports/claims-detail", routes.GetClaimsDetail)
+		authGroup.GET("/reports/accounts-payable-detail", routes.GetAccountsPayableDetail)
+		authGroup.GET("/reports/product-stats", routes.GetReportsProductStats)      // опционально
+		authGroup.GET("/reports/vendor-stats", routes.GetReportsVendorStats)        // опционально
+
+		// Претензии
+		authGroup.POST("/claims", routes.CreateClaim)
+		authGroup.GET("/claims/document/:document_id", routes.GetClaimsByDocument)
+		authGroup.GET("/claims", routes.GetAllClaims)
+		authGroup.PATCH("/claims/:id/status", routes.UpdateClaimStatus)
+		authGroup.GET("/claims/stats", routes.GetClaimsStats)
 
 
 		//-------------------------Админские маршруты----------------------------
