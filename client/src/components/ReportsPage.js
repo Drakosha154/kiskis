@@ -302,6 +302,13 @@ function StatusBadge({ status }) {
 function Calendar({ events, loading, onDateSelect, selectedDate, dateRange }) {
   const [currentDate, setCurrentDate] = useState(new Date());
 
+  const getLocalDateString = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+  };
+
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -314,7 +321,7 @@ function Calendar({ events, loading, onDateSelect, selectedDate, dateRange }) {
 
   const getEventsForDate = (date) => {
     if (!events) return [];
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = getLocalDateString(date);
     return events.filter(event => event.date === dateStr);
   };
 
@@ -345,7 +352,7 @@ function Calendar({ events, loading, onDateSelect, selectedDate, dateRange }) {
     const monthDays = [];
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = getLocalDateString(date);
       const dayEvents = getEventsForDate(date);
       const isToday = dateStr === new Date().toISOString().split('T')[0];
       const isSelected = selectedDate === dateStr;

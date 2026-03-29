@@ -146,3 +146,12 @@ type Storage struct {
 type Money struct {
 	Money float64
 }
+
+type ClaimReport struct {
+	ID          uint `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
+	DocumentID  int       `json:"document_id"`
+	Marriage    bool      `json:"marriage"`
+	Deadline    bool      `json:"deadline"`
+	Quantity    bool      `json:"quantity"`
+	CreatedAt   time.Time `json:"created_at"`
+}

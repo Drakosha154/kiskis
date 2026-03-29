@@ -1,3 +1,26 @@
-фикс дедлайна на календаре
+фикс дедлайна на календаре (+)
 количество претензий и модальное окно на приёмке склада не работает
 Уровень задолжености не работает
+
+Мне нужно, чтобы при нажатии на кнопку в модальном окне приемки товара отправлялся POST-запрос для сохранение параметров, указанных в этой структуре таблицы: -- Table: public.claim_report
+
+-- DROP TABLE IF EXISTS public.claim_report;
+
+CREATE TABLE IF NOT EXISTS public.claim_report
+(
+    id uuid NOT NULL,
+    document_id integer,
+    marriage boolean,
+    deadline boolean,
+    quantity boolean,
+    description text COLLATE pg_catalog."default",
+    CONSTRAINT claim_report_pkey PRIMARY KEY (id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public.claim_report
+    OWNER to postgres;
+где  marriage - брак, deadline - опоздание по срокам доставки, quantity - несоответствие товара в количестве
+Также добавь 3 чекбокса, в которых будут помечаться претензии по браку, опозданию по срокам и несоответствию количества товара.
+Как пример оформления серверной части отправил тебе файл product.go

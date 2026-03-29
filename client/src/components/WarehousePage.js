@@ -40,11 +40,13 @@ function WarehousePage({ setError }) {
   // Состояния для претензий
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [claimData, setClaimData] = useState({
-    claim_type: 'shortage',
-    description: '',
-    amount: 0,
-    items: []
-  });
+  claim_type: 'shortage',
+  amount: 0,
+  items: [],
+  marriage: false,    // Добавить
+  deadline: false,    // Добавить
+  quantity: false     // Добавить
+});
   const [receiptDocumentId, setReceiptDocumentId] = useState(null);
   
   // Состояния для приёмки
@@ -359,146 +361,221 @@ function WarehousePage({ setError }) {
     }
   };
 
-  const handleCompleteReceipt = async () => {
-    const token = localStorage.getItem('token');
+  const handleCreateClaimReport = async () => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    setLoading(true);
     
-    try {
-      setLoading(true);
-      
-      // 1. Создаём документ прихода
-      const receiptDoc = {
-        doc_number: `PR-${Date.now()}`,
-        doc_type: 'Приход',
+    // Проверяем, что выбран хотя бы один тип претензии
+    if (!claimData.marriage && !claimData.deadline && !claimData.quantity) {
+      alert('Пожалуйста, выберите хотя бы один тип претензии');
+      return;
+    }
+    
+    const response = await fetch('http://localhost:8080/api/claim-report', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        document_id: receiptDocumentId,
+        marriage: claimData.marriage || false,
+        deadline: claimData.deadline || false,
+        quantity: claimData.quantity || false
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to create claim report');
+    }
+    
+    const result = await response.json();
+    alert(`Претензия создана успешно!`);
+    setShowClaimModal(false);
+    
+    // Обновляем статус договора
+    await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        doc_number: selectedContract.Doc_number,
+        doc_type: selectedContract.Doc_type,
         vendor_id: selectedContract.Vendor_id,
-        status: discrepancies.length > 0 ? 'Принят с расхождениями' : 'Завершён',
-        total_amount: calculateTotalAmount(),
-        description: `Приход товаров по договору ${selectedContract.Doc_number}\n${receiptNotes}`
+        status: 'Принят с претензиями',
+        total_amount: selectedContract.Total_amount,
+        description: `${selectedContract.Description || ''}\n\nСоздана претензия: ${claimData.description || 'Претензия по качеству/количеству'}`
+      })
+    });
+    
+    // Обновляем данные
+    await fetchProducts();
+    await fetchContracts();
+    window.dispatchEvent(new CustomEvent('balanceUpdate'));
+    
+    handleCloseReceiveModal();
+    
+  } catch (error) {
+    console.error('Claim report error:', error);
+    setError('Ошибка при создании претензии: ' + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  const handleCompleteReceipt = async () => {
+  const token = localStorage.getItem('token');
+  
+  try {
+    setLoading(true);
+    
+    // 1. Создаём документ прихода
+    const receiptDoc = {
+      doc_number: `PR-${Date.now()}`,
+      doc_type: 'Приход',
+      vendor_id: selectedContract.Vendor_id,
+      status: (discrepancies.length > 0 || claimData.marriage || claimData.deadline || claimData.quantity) ? 'Расхождение' : 'Завершён',
+      total_amount: calculateTotalAmount(),
+      description: `Приход товаров по договору ${selectedContract.Doc_number}\n${receiptNotes}`
+    };
+
+    const docResponse = await fetch('http://localhost:8080/api/documents', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(receiptDoc)
+    });
+
+    if (!docResponse.ok) {
+      const errorData = await docResponse.json();
+      throw new Error(errorData.error || 'Failed to create receipt document');
+    }
+    
+    const docResult = await docResponse.json();
+    setReceiptDocument(docResult);
+    setReceiptDocumentId(docResult.id);
+
+    // 2. Подготавливаем данные для массового обновления склада
+    const itemsToUpdate = receivedItems.filter(item => item.received_quantity > 0);
+    
+    if (itemsToUpdate.length > 0) {
+      const bulkUpdateData = {
+        items: itemsToUpdate.map(item => ({
+          product_id: item.product_id,
+          quantity: item.received_quantity,
+          price: item.vendor_price || 0
+        })),
+        document_id: docResult.id,
+        document_type: 'Приход',
+        vendor_id: selectedContract.Vendor_id
       };
 
-      const docResponse = await fetch('http://localhost:8080/api/documents', {
+      const storageResponse = await fetch('http://localhost:8080/api/storage/bulk-update', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(receiptDoc)
+        body: JSON.stringify(bulkUpdateData)
       });
 
-      if (!docResponse.ok) {
-        const errorData = await docResponse.json();
-        throw new Error(errorData.error || 'Failed to create receipt document');
+      if (!storageResponse.ok) {
+        const errorText = await storageResponse.text();
+        console.error('Storage update error:', errorText);
+        throw new Error('Failed to update storage');
       }
-      
-      const docResult = await docResponse.json();
-      setReceiptDocument(docResult);
-      setReceiptDocumentId(docResult.id);
-
-      // 2. Подготавливаем данные для массового обновления склада
-      const itemsToUpdate = receivedItems.filter(item => item.received_quantity > 0);
-      
-      if (itemsToUpdate.length > 0) {
-        const bulkUpdateData = {
-          items: itemsToUpdate.map(item => ({
-            product_id: item.product_id,
-            quantity: item.received_quantity,
-            price: item.vendor_price || 0
-          })),
-          document_id: docResult.id,
-          document_type: 'Приход',
-          vendor_id: selectedContract.Vendor_id
-        };
-
-        const storageResponse = await fetch('http://localhost:8080/api/storage/bulk-update', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(bulkUpdateData)
-        });
-
-        if (!storageResponse.ok) {
-          const errorText = await storageResponse.text();
-          console.error('Storage update error:', errorText);
-          throw new Error('Failed to update storage');
-        }
-      }
-
-      // 3. Обновляем статус договора
-      if (discrepancies.length > 0) {
-        await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            doc_number: selectedContract.Doc_number,
-            doc_type: selectedContract.Doc_type,
-            vendor_id: selectedContract.Vendor_id,
-            status: 'Частично исполнен',
-            total_amount: selectedContract.Total_amount,
-            description: `${selectedContract.Description || ''}\n\nПриёмка завершена с расхождениями. Создан документ: ${receiptDoc.doc_number}`
-          })
-        });
-        
-        // Подготавливаем данные для претензии
-        const shortageItems = receivedItems.filter(item => item.received_quantity < item.expected_quantity);
-        setClaimData({
-          claim_type: 'shortage',
-          description: `Недопоставка по договору ${selectedContract.Doc_number}. ${shortageItems.map(i => `${i.product_name}: ожидалось ${i.expected_quantity}, получено ${i.received_quantity}`).join(', ')}`,
-          amount: calculateShortageAmount(),
-          items: shortageItems
-        });
-        
-        // Закрываем модальное окно приёмки и открываем окно создания претензии
-        setShowReceiveModal(false);
-        setShowClaimModal(true);
-        
-      } else {
-        await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            doc_number: selectedContract.Doc_number,
-            doc_type: selectedContract.Doc_type,
-            vendor_id: selectedContract.Vendor_id,
-            status: 'Исполнен',
-            total_amount: selectedContract.Total_amount,
-            description: selectedContract.Description || ''
-          })
-        });
-        
-        await fetchProducts();
-        await fetchContracts();
-        window.dispatchEvent(new CustomEvent('balanceUpdate'));
-        alert(`Приёмка завершена. Создан документ: ${receiptDoc.doc_number}`);
-        handleCloseReceiveModal();
-      }
-      
-    } catch (error) {
-      console.error('Receipt error:', error);
-      setError('Ошибка при оформлении приёмки: ' + error.message);
-    } finally {
-      setLoading(false);
     }
-  };
+
+    // 3. СОЗДАЁМ ПРЕТЕНЗИЮ, если выбран хотя бы один чекбокс
+    const hasClaim = claimData.marriage || claimData.deadline || claimData.quantity;
+    console.log('123213123')
+    if (hasClaim) {
+      const claimResponse = await fetch('http://localhost:8080/api/claim-report', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          document_id: docResult.id,
+          marriage: claimData.marriage || false,
+          deadline: claimData.deadline || false,
+          quantity: claimData.quantity || false,
+          description: claimData.description || ''
+        })
+      });
+      console.log('123213123')
+      if (!claimResponse.ok) {
+        console.warn('Claim creation failed but receipt completed');
+      } else {
+        console.log('Claim created successfully');
+      }
+    }
+
+    // 4. Обновляем статус договора
+    const contractStatus = (discrepancies.length > 0 || hasClaim) ? 'Частично исполнен' : 'Исполнен';
+    
+    await fetch(`http://localhost:8080/api/documents/${selectedContract.ID}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        doc_number: selectedContract.Doc_number,
+        doc_type: selectedContract.Doc_type,
+        vendor_id: selectedContract.Vendor_id,
+        status: contractStatus,
+        total_amount: selectedContract.Total_amount,
+        description: `${selectedContract.Description || ''}\n\nПриёмка завершена. Создан документ: ${receiptDoc.doc_number}${hasClaim ? '\nСоздана претензия.' : ''}`
+      })
+    });
+    
+    await fetchProducts();
+    await fetchContracts();
+    window.dispatchEvent(new CustomEvent('balanceUpdate'));
+    
+    const message = hasClaim ? 'Приёмка завершена. Претензия создана!' : 'Приёмка завершена успешно!';
+    alert(message);
+    handleCloseReceiveModal();
+    
+  } catch (error) {
+    console.error('Receipt error:', error);
+    setError('Ошибка при оформлении приёмки: ' + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleCloseReceiveModal = () => {
-    setShowReceiveModal(false);
-    setReceiptStep(1);
-    setSelectedContract(null);
-    setContractProducts([]);
-    setReceivedItems([]);
-    setDiscrepancies([]);
-    setReceiptNotes('');
-    setReceiptDocument(null);
-    setReceiptDocumentId(null);
-    setActiveTab('contracts');
-  };
+  setShowReceiveModal(false);
+  setReceiptStep(1);
+  setSelectedContract(null);
+  setContractProducts([]);
+  setReceivedItems([]);
+  setDiscrepancies([]);
+  setReceiptNotes('');
+  setReceiptDocument(null);
+  setReceiptDocumentId(null);
+  setActiveTab('contracts');
+  // Сбрасываем данные претензии
+  setClaimData({
+    claim_type: 'shortage',
+    description: '',
+    amount: 0,
+    items: [],
+    marriage: false,
+    deadline: false,
+    quantity: false
+  });
+};
 
   const handleSort = (key) => {
     setSortConfig({
@@ -1068,95 +1145,135 @@ function WarehousePage({ setError }) {
       </Tabs>
     )}
           {receiptStep === 2 && selectedContract && (
-            <div>
-              <Alert variant="info">
-                <Row>
-                  <Col>
-                    <strong>Договор:</strong> {selectedContract.Doc_number}
-                  </Col>
-                  <Col>
-                    <strong>Поставщик:</strong> {selectedContract.vendor_name}
-                  </Col>
-                  <Col>
-                    <strong>Дата:</strong> {new Date(selectedContract.Doc_date).toLocaleDateString()}
-                  </Col>
-                </Row>
-              </Alert>
-              
-              <Table striped bordered hover>
-                <thead>
-                  <tr>
-                    <th>Товар</th>
-                    <th>Артикул</th>
-                    <th className="text-center">Ожидаемое кол-во</th>
-                    <th className="text-center">Фактическое кол-во</th>
-                    <th className="text-center">Ед. изм.</th>
-                    <th className="text-end">Цена</th>
-                    <th className="text-end">Сумма</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {receivedItems.map((item, index) => (
-                    <tr key={index} className={item.expected_quantity !== item.received_quantity ? 'table-warning' : ''}>
-                      <td>{item.product_name}</td>
-                      <td>{item.product_article}</td>
-                      <td className="text-center">
-                        <Form.Control
-                          type="number"
-                          value={item.expected_quantity}
-                          onChange={(e) => handleQuantityChange(index, 'expected_quantity', e.target.value)}
-                          style={{ width: '100px', margin: '0 auto' }}
-                          min="0"
-                          step="0.01"
-                        />
-                      </td>
-                      <td className="text-center">
-                        <Form.Control
-                          type="number"
-                          value={item.received_quantity}
-                          onChange={(e) => handleQuantityChange(index, 'received_quantity', e.target.value)}
-                          style={{ width: '100px', margin: '0 auto' }}
-                          min="0"
-                          step="0.01"
-                        />
-                      </td>
-                      <td className="text-center">{item.unit}</td>
-                      <td className="text-end">{formatNumber(item.vendor_price)} ₽</td>
-                      <td className="text-end">{formatNumber(item.received_quantity * item.vendor_price)} ₽</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan="6" className="text-end"><strong>Итого:</strong></td>
-                    <td className="text-end"><strong>{formatNumber(calculateTotalAmount())} ₽</strong></td>
-                  </tr>
-                </tfoot>
-              </Table>
+  <div>
+    <Alert variant="info">
+      <Row>
+        <Col>
+          <strong>Договор:</strong> {selectedContract.Doc_number}
+        </Col>
+        <Col>
+          <strong>Поставщик:</strong> {selectedContract.vendor_name}
+        </Col>
+        <Col>
+          <strong>Дата:</strong> {new Date(selectedContract.Doc_date).toLocaleDateString()}
+        </Col>
+      </Row>
+    </Alert>
+    
+    <Table striped bordered hover>
+      <thead>
+        <tr>
+          <th>Товар</th>
+          <th>Артикул</th>
+          <th className="text-center">Ожидаемое кол-во</th>
+          <th className="text-center">Фактическое кол-во</th>
+          <th className="text-center">Ед. изм.</th>
+          <th className="text-end">Цена</th>
+          <th className="text-end">Сумма</th>
+        </tr>
+      </thead>
+      <tbody>
+        {receivedItems.map((item, index) => (
+          <tr key={index} className={item.expected_quantity !== item.received_quantity ? 'table-warning' : ''}>
+            <td>{item.product_name}</td>
+            <td>{item.product_article}</td>
+            <td className="text-center">
+              <Form.Control
+                type="number"
+                value={item.expected_quantity}
+                onChange={(e) => handleQuantityChange(index, 'expected_quantity', e.target.value)}
+                style={{ width: '100px', margin: '0 auto' }}
+                min="0"
+                step="0.01"
+              />
+            </td>
+            <td className="text-center">
+              <Form.Control
+                type="number"
+                value={item.received_quantity}
+                onChange={(e) => handleQuantityChange(index, 'received_quantity', e.target.value)}
+                style={{ width: '100px', margin: '0 auto' }}
+                min="0"
+                step="0.01"
+              />
+            </td>
+            <td className="text-center">{item.unit}</td>
+            <td className="text-end">{formatNumber(item.vendor_price)} ₽</td>
+            <td className="text-end">{formatNumber(item.received_quantity * item.vendor_price)} ₽</td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colSpan="6" className="text-end"><strong>Итого:</strong></td>
+          <td className="text-end"><strong>{formatNumber(calculateTotalAmount())} ₽</strong></td>
+        </tr>
+      </tfoot>
+    </Table>
 
-              <Form.Group className="mb-3">
-                <Form.Label>Примечания к приёмке</Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={2}
-                  value={receiptNotes}
-                  onChange={(e) => setReceiptNotes(e.target.value)}
-                  placeholder="Дополнительная информация о приёмке..."
-                />
-              </Form.Group>
+    {/* БЛОК С ЧЕКБОКСАМИ ДЛЯ ПРЕТЕНЗИЙ */}
+    <Card className="mb-3 border-warning">
+      <Card.Header className="bg-warning text-dark">
+        <strong>⚠️ Претензия поставщику</strong>
+      </Card.Header>
+      <Card.Body>
+        <Form.Group className="mb-3">
+          <Form.Label><strong>Типы претензий (можно выбрать несколько):</strong></Form.Label>
+          <div className="mt-2">
+            <Form.Check
+              type="checkbox"
+              id="marriage-checkbox"
+              label="🚫 Брак товара"
+              checked={claimData.marriage || false}
+              onChange={(e) => setClaimData({...claimData, marriage: e.target.checked})}
+              className="mb-2"
+            />
+            <Form.Check
+              type="checkbox"
+              id="deadline-checkbox"
+              label="⏰ Опоздание по срокам доставки"
+              checked={claimData.deadline || false}
+              onChange={(e) => setClaimData({...claimData, deadline: e.target.checked})}
+              className="mb-2"
+            />
+            <Form.Check
+              type="checkbox"
+              id="quantity-checkbox"
+              label="📦 Несоответствие количества товара"
+              checked={claimData.quantity || false}
+              onChange={(e) => setClaimData({...claimData, quantity: e.target.checked})}
+            />
+          </div>
+        </Form.Group>
 
-              {discrepancies.length > 0 && (
-                <Alert variant="warning">
-                  <strong>Обнаружены расхождения:</strong>
-                  <ul className="mb-0 mt-2">
-                    {discrepancies.map((d, i) => (
-                      <li key={i}>{d.productName}</li>
-                    ))}
-                  </ul>
-                </Alert>
-              )}
-            </div>
-          )}
+        {discrepancies.length > 0 && (
+          <Alert variant="warning">
+            <strong>Обнаружены расхождения в количестве:</strong>
+            <ul className="mb-0 mt-2">
+              {discrepancies.map((d, i) => (
+                <li key={i}>{d.productName}</li>
+              ))}
+            </ul>
+            <small className="text-muted mt-2 d-block">
+              Сумма недопоставки: {formatNumber(calculateShortageAmount())} ₽
+            </small>
+          </Alert>
+        )}
+      </Card.Body>
+    </Card>
+
+    <Form.Group className="mb-3">
+      <Form.Label>Примечания к приёмке</Form.Label>
+      <Form.Control
+        as="textarea"
+        rows={2}
+        value={receiptNotes}
+        onChange={(e) => setReceiptNotes(e.target.value)}
+        placeholder="Дополнительная информация о приёмке..."
+      />
+    </Form.Group>
+  </div>
+)}
         </Modal.Body>
         <Modal.Footer>
           {receiptStep === 2 && (
@@ -1188,96 +1305,6 @@ function WarehousePage({ setError }) {
         </Modal.Footer>
       </Modal>
 
-      {/* Модальное окно создания претензии */}
-      <Modal show={showClaimModal} onHide={() => setShowClaimModal(false)} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>⚠️ Создание претензии поставщику</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Alert variant="warning">
-            <strong>Обнаружены расхождения при приёмке!</strong>
-            <br />
-            Сумма недопоставки: {formatNumber(calculateShortageAmount())} ₽
-          </Alert>
-          
-          <Form>
-            <Form.Group className="mb-3">
-              <Form.Label>Тип претензии</Form.Label>
-              <Form.Select
-                value={claimData.claim_type}
-                onChange={(e) => setClaimData({...claimData, claim_type: e.target.value})}
-              >
-                <option value="shortage">Недопоставка</option>
-                <option value="defect">Брак</option>
-                <option value="damage">Повреждение</option>
-                <option value="mismatch">Несоответствие</option>
-              </Form.Select>
-            </Form.Group>
-            
-            <Form.Group className="mb-3">
-              <Form.Label>Описание претензии</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={4}
-                value={claimData.description}
-                onChange={(e) => setClaimData({...claimData, description: e.target.value})}
-                placeholder="Подробно опишите причину претензии..."
-              />
-            </Form.Group>
-            
-            <Form.Group className="mb-3">
-              <Form.Label>Сумма претензии (₽)</Form.Label>
-              <Form.Control
-                type="number"
-                value={claimData.amount}
-                onChange={(e) => setClaimData({...claimData, amount: parseFloat(e.target.value) || 0})}
-                step="0.01"
-              />
-              <Form.Text className="text-muted">
-                Сумма недопоставки: {formatNumber(calculateShortageAmount())} ₽
-              </Form.Text>
-            </Form.Group>
-            
-            <h6>Товары с расхождениями:</h6>
-            <Table size="sm" bordered>
-              <thead>
-                <tr>
-                  <th>Товар</th>
-                  <th>Ожидалось</th>
-                  <th>Получено</th>
-                  <th>Недопоставка</th>
-                  <th>Сумма</th>
-                </tr>
-              </thead>
-              <tbody>
-                {receivedItems.filter(item => item.received_quantity < item.expected_quantity).map((item, idx) => {
-                  const shortage = item.expected_quantity - item.received_quantity;
-                  return (
-                    <tr key={idx}>
-                      <td>{item.product_name}</td>
-                      <td className="text-center">{item.expected_quantity}</td>
-                      <td className="text-center text-danger">{item.received_quantity}</td>
-                      <td className="text-center">{shortage}</td>
-                      <td className="text-end">{formatNumber(shortage * (item.vendor_price || 0))} ₽</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </Table>
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => {
-            setShowClaimModal(false);
-            handleCloseReceiveModal();
-          }}>
-            Создать претензию позже
-          </Button>
-          <Button variant="danger" onClick={handleCreateClaim} disabled={loading}>
-            {loading ? 'Создание...' : 'Создать претензию'}
-          </Button>
-        </Modal.Footer>
-      </Modal>
 
       {/* Модальное окно добавления товара */}
       <Modal show={showAddModal} onHide={() => setShowAddModal(false)} size="lg">

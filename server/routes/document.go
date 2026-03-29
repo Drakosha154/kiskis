@@ -57,12 +57,6 @@ func NewDocument(c *gin.Context) {
 			deliveryDate = &parsedDate
 		}
 	}
-	
-	// Если дата поставки не задана, ставим текущее время + 7 дней (по умолчанию)
-	if deliveryDate == nil {
-		defaultDelivery := docDate.AddDate(0, 0, 7)
-		deliveryDate = &defaultDelivery
-	}
 
 	// 2. DeadlineDate - дедлайн (срок оплаты/исполнения)
 	var deadlineDate *time.Time

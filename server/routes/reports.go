@@ -106,7 +106,7 @@ func GetReportsCalendarEvents(c *gin.Context) {
 		`).
 		Joins("LEFT JOIN vendors v ON d.vendor_id = v.id").
 		Joins("LEFT JOIN (SELECT document_id, SUM(amount) as paid_amount FROM accountings WHERE operation_type = 'Оплата' GROUP BY document_id) a ON d.id = a.document_id").
-		Where("d.doc_type = ? AND d.status NOT IN (?) AND d.total_amount > COALESCE(a.paid_amount, 0)", 
+		Where("d.doc_type = ? AND d.status NOT IN (?) AND d.total_amount > COALESCE(a.paid_amount, 0)",
 			"Приход", []string{"Оплачен", "Завершён"}).
 		Scan(&unpaidDocuments)
 
@@ -298,80 +298,6 @@ func GetPurchaseCostDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"documents": documents})
 }
 
-// GetClaimsDetail - обновлённая версия с деталями из claims
-func GetClaimsDetail(c *gin.Context) {
-	dateFrom := c.Query("date_from")
-	dateTo := c.Query("date_to")
-
-	if dateFrom == "" {
-		dateFrom = time.Now().AddDate(0, -1, 0).Format("2006-01-02")
-	}
-	if dateTo == "" {
-		dateTo = time.Now().Format("2006-01-02")
-	}
-
-	type ClaimDetail struct {
-		ID             uint    `json:"id"`
-		ClaimNumber    string  `json:"claim_number"`
-		DocumentNumber string  `json:"document_number"`
-		ClaimDate      string  `json:"claim_date"`
-		VendorName     string  `json:"vendor_name"`
-		ClaimType      string  `json:"claim_type"`
-		ClaimTypeText  string  `json:"claim_type_text"`
-		TotalAmount    float64 `json:"total_amount"`
-		Status         string  `json:"status"`
-		Description    string  `json:"description"`
-		Resolution     string  `json:"resolution"`
-		Items          []struct {
-			ProductName string  `json:"product_name"`
-			Quantity    float64 `json:"quantity"`
-			Amount      float64 `json:"amount"`
-			IssueType   string  `json:"issue_type"`
-		} `json:"items"`
-	}
-
-	var claims []ClaimDetail
-
-	// Получаем основные данные претензий
-	database.DB.Table("claims c").
-		Select(`
-			c.id,
-			c.claim_number,
-			d.doc_number as document_number,
-			c.claim_date,
-			v.company_name as vendor_name,
-			c.claim_type,
-			c.amount as total_amount,
-			c.status,
-			c.description,
-			c.resolution
-		`).
-		Joins("LEFT JOIN documents d ON c.document_id = d.id").
-		Joins("LEFT JOIN vendors v ON c.vendor_id = v.id").
-		Where("c.created_at BETWEEN ? AND ?", dateFrom, dateTo+" 23:59:59").
-		Order("c.created_at DESC").
-		Scan(&claims)
-
-	// Получаем позиции для каждой претензии
-	for i := range claims {
-		var items []struct {
-			ProductName string  `json:"product_name"`
-			Quantity    float64 `json:"quantity"`
-			Amount      float64 `json:"amount"`
-			IssueType   string  `json:"issue_type"`
-		}
-		database.DB.Table("claim_items ci").
-			Select("p.name as product_name, ci.quantity, ci.amount, ci.issue_type").
-			Joins("LEFT JOIN products p ON ci.product_id = p.id").
-			Where("ci.claim_id = ?", claims[i].ID).
-			Scan(&items)
-		claims[i].Items = items
-		claims[i].ClaimTypeText = getClaimTypeText(claims[i].ClaimType)
-		claims[i].ClaimDate = claims[i].ClaimDate[:10] // Форматируем дату
-	}
-
-	c.JSON(http.StatusOK, gin.H{"claims": claims})
-}
 
 // GetAccountsPayableDetail - детальная информация по кредиторской задолженности
 func GetAccountsPayableDetail(c *gin.Context) {
