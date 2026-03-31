@@ -1,4 +1,4 @@
-package models
+﻿package models
 
 import (
 	"time"
@@ -15,7 +15,7 @@ func (u *User) HashPassword(Password_hash string) error {
 	return nil
 }
 
-// Проверка пароля
+// РџСЂРѕРІРµСЂРєР° РїР°СЂРѕР»СЏ
 func (u *User) CheckPassword(password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password))
 }
@@ -71,43 +71,43 @@ type Documents struct {
 	Doc_date     string `gorm:"not null"`
 	Vendor_id    int
 	User_id      uint
-	Status       string  `gorm:"default:Черновик"`
+	Status       string  `gorm:"default:Р§РµСЂРЅРѕРІРёРє"`
 	Total_amount float64 `gorm:"default:0"`
 	Currency     string  `gorm:"default:RUB"`
 	Description  string
 	Created_at   time.Time
-	DeliveryDate *time.Time `gorm:"column:delivery_date"`  // Добавить в БД
-	DeadlineDate *time.Time `gorm:"column:deadline_date"`  // Добавить в БД
-	DeliveryDays *int       `gorm:"column:delivery_days"`  // Добавить в БД
-	ActualDeliveryDate *time.Time `gorm:"column:actual_delivery_date"`  // Добавить в БД
+	DeliveryDate *time.Time `gorm:"column:delivery_date"`  // Р”РѕР±Р°РІРёС‚СЊ РІ Р‘Р”
+	DeadlineDate *time.Time `gorm:"column:deadline_date"`  // Р”РѕР±Р°РІРёС‚СЊ РІ Р‘Р”
+	DeliveryDays *int       `gorm:"column:delivery_days"`  // Р”РѕР±Р°РІРёС‚СЊ РІ Р‘Р”
+	ActualDeliveryDate *time.Time `gorm:"column:actual_delivery_date"`  // Р”РѕР±Р°РІРёС‚СЊ РІ Р‘Р”
 }
 
 type Claim struct {
 	ID          uint      `gorm:"primaryKey"`
-	ClaimNumber string    `gorm:"not null;unique"`  // Номер претензии
-	DocumentID  int       `gorm:"not null"`          // ID документа прихода
-	VendorID    int       `gorm:"not null"`          // ID поставщика
-	ClaimDate   time.Time `gorm:"not null"`          // Дата претензии
-	ClaimType   string    `gorm:"not null"`          // Тип: брак, недопоставка, просрочка, несоответствие
-	Description string    `gorm:"type:text"`         // Описание проблемы
-	Amount      float64   `gorm:"default:0"`         // Сумма претензии
-	Status      string    `gorm:"default:'Новая'"`   // Статус: Новая, В работе, Удовлетворена, Отклонена
-	ResolvedAt  *time.Time                           // Дата удовлетворения/отклонения
-	Resolution  string    `gorm:"type:text"`         // Результат рассмотрения
-	CreatedBy   uint      `gorm:"not null"`          // Кто создал
+	ClaimNumber string    `gorm:"not null;unique"`  // РќРѕРјРµСЂ РїСЂРµС‚РµРЅР·РёРё
+	DocumentID  int       `gorm:"not null"`          // ID РґРѕРєСѓРјРµРЅС‚Р° РїСЂРёС…РѕРґР°
+	VendorID    int       `gorm:"not null"`          // ID РїРѕСЃС‚Р°РІС‰РёРєР°
+	ClaimDate   time.Time `gorm:"not null"`          // Р”Р°С‚Р° РїСЂРµС‚РµРЅР·РёРё
+	ClaimType   string    `gorm:"not null"`          // РўРёРї: Р±СЂР°Рє, РЅРµРґРѕРїРѕСЃС‚Р°РІРєР°, РїСЂРѕСЃСЂРѕС‡РєР°, РЅРµСЃРѕРѕС‚РІРµС‚СЃС‚РІРёРµ
+	Description string    `gorm:"type:text"`         // РћРїРёСЃР°РЅРёРµ РїСЂРѕР±Р»РµРјС‹
+	Amount      float64   `gorm:"default:0"`         // РЎСѓРјРјР° РїСЂРµС‚РµРЅР·РёРё
+	Status      string    `gorm:"default:'РќРѕРІР°СЏ'"`   // РЎС‚Р°С‚СѓСЃ: РќРѕРІР°СЏ, Р’ СЂР°Р±РѕС‚Рµ, РЈРґРѕРІР»РµС‚РІРѕСЂРµРЅР°, РћС‚РєР»РѕРЅРµРЅР°
+	ResolvedAt  *time.Time                           // Р”Р°С‚Р° СѓРґРѕРІР»РµС‚РІРѕСЂРµРЅРёСЏ/РѕС‚РєР»РѕРЅРµРЅРёСЏ
+	Resolution  string    `gorm:"type:text"`         // Р РµР·СѓР»СЊС‚Р°С‚ СЂР°СЃСЃРјРѕС‚СЂРµРЅРёСЏ
+	CreatedBy   uint      `gorm:"not null"`          // РљС‚Рѕ СЃРѕР·РґР°Р»
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
 
 type ClaimItem struct {
 	ID         uint    `gorm:"primaryKey"`
-	ClaimID    int     `gorm:"not null"`   // ID претензии
-	ProductID  int     `gorm:"not null"`   // ID товара
-	Quantity   float64 `gorm:"not null"`   // Количество с браком/недостачей
-	Price      float64 `gorm:"default:0"`  // Цена товара
-	Amount     float64 `gorm:"default:0"`  // Сумма претензии по товару
-	IssueType  string  `gorm:"not null"`   // Тип проблемы: брак, недостача, повреждение
-	Description string `gorm:"type:text"`  // Детали по товару
+	ClaimID    int     `gorm:"not null"`   // ID РїСЂРµС‚РµРЅР·РёРё
+	ProductID  int     `gorm:"not null"`   // ID С‚РѕРІР°СЂР°
+	Quantity   float64 `gorm:"not null"`   // РљРѕР»РёС‡РµСЃС‚РІРѕ СЃ Р±СЂР°РєРѕРј/РЅРµРґРѕСЃС‚Р°С‡РµР№
+	Price      float64 `gorm:"default:0"`  // Р¦РµРЅР° С‚РѕРІР°СЂР°
+	Amount     float64 `gorm:"default:0"`  // РЎСѓРјРјР° РїСЂРµС‚РµРЅР·РёРё РїРѕ С‚РѕРІР°СЂСѓ
+	IssueType  string  `gorm:"not null"`   // РўРёРї РїСЂРѕР±Р»РµРјС‹: Р±СЂР°Рє, РЅРµРґРѕСЃС‚Р°С‡Р°, РїРѕРІСЂРµР¶РґРµРЅРёРµ
+	Description string `gorm:"type:text"`  // Р”РµС‚Р°Р»Рё РїРѕ С‚РѕРІР°СЂСѓ
 	CreatedAt  time.Time
 }
 
@@ -148,10 +148,15 @@ type Money struct {
 }
 
 type ClaimReport struct {
-	ID          uint `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
-	DocumentID  int       `json:"document_id"`
-	Marriage    bool      `json:"marriage"`
-	Deadline    bool      `json:"deadline"`
-	Quantity    bool      `json:"quantity"`
-	CreatedAt   time.Time `json:"created_at"`
+    ID         uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+    DocumentID int       `gorm:"column:document_id;not null" json:"document_id"`
+    Marriage   bool      `gorm:"column:marriage;default:false" json:"marriage"`
+    Deadline   bool      `gorm:"column:deadline;default:false" json:"deadline"`
+    Quantity   bool      `gorm:"column:quantity;default:false" json:"quantity"`
+    CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+// РЈРєР°Р·С‹РІР°РµРј СЃСѓС‰РµСЃС‚РІСѓСЋС‰РµРµ РёРјСЏ С‚Р°Р±Р»РёС†С‹
+func (ClaimReport) TableName() string {
+    return "claim_reports" // РСЃРїРѕР»СЊР·СѓРµРј СЃСѓС‰РµСЃС‚РІСѓСЋС‰СѓСЋ С‚Р°Р±Р»РёС†Сѓ claims
 }

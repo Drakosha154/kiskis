@@ -2,12 +2,12 @@
 -- PostgreSQL database dump
 --
 
-\restrict FQmDuowYzHERgqPKgSgnLjweH3fESUSjt4p7aSkbEPBN8dyDb3uYrduK0xy2MP4
+\restrict urSt6KgoJP8k9LjsEwhMOf0S2exCBEFLhn5ccKHaoB46rnrYNF0PiBDWUDQ3cRx
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
 
--- Started on 2026-03-29 19:43:12
+-- Started on 2026-03-31 11:11:31
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -64,12 +64,53 @@ CREATE SEQUENCE public.accounting_id_seq
 ALTER SEQUENCE public.accounting_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4999 (class 0 OID 0)
+-- TOC entry 5012 (class 0 OID 0)
 -- Dependencies: 218
 -- Name: accounting_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.accounting_id_seq OWNED BY public.accountings.id;
+
+
+--
+-- TOC entry 238 (class 1259 OID 25319)
+-- Name: claim_reports; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.claim_reports (
+    id bigint NOT NULL,
+    document_id bigint NOT NULL,
+    marriage boolean DEFAULT false,
+    deadline boolean DEFAULT false,
+    quantity boolean DEFAULT false,
+    created_at timestamp with time zone
+);
+
+
+ALTER TABLE public.claim_reports OWNER TO postgres;
+
+--
+-- TOC entry 237 (class 1259 OID 25318)
+-- Name: claim_reports_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.claim_reports_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.claim_reports_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 5013 (class 0 OID 0)
+-- Dependencies: 237
+-- Name: claim_reports_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.claim_reports_id_seq OWNED BY public.claim_reports.id;
 
 
 --
@@ -125,7 +166,7 @@ CREATE SEQUENCE public.document_items_id_seq
 ALTER SEQUENCE public.document_items_id_seq OWNER TO postgres;
 
 --
--- TOC entry 5000 (class 0 OID 0)
+-- TOC entry 5014 (class 0 OID 0)
 -- Dependencies: 220
 -- Name: document_items_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -178,7 +219,7 @@ CREATE SEQUENCE public.documents_id_seq
 ALTER SEQUENCE public.documents_id_seq OWNER TO postgres;
 
 --
--- TOC entry 5001 (class 0 OID 0)
+-- TOC entry 5015 (class 0 OID 0)
 -- Dependencies: 222
 -- Name: documents_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -227,7 +268,7 @@ CREATE SEQUENCE public.kpi_id_seq
 ALTER SEQUENCE public.kpi_id_seq OWNER TO postgres;
 
 --
--- TOC entry 5002 (class 0 OID 0)
+-- TOC entry 5016 (class 0 OID 0)
 -- Dependencies: 224
 -- Name: kpi_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -283,7 +324,7 @@ CREATE SEQUENCE public.products_id_seq
 ALTER SEQUENCE public.products_id_seq OWNER TO postgres;
 
 --
--- TOC entry 5003 (class 0 OID 0)
+-- TOC entry 5017 (class 0 OID 0)
 -- Dependencies: 227
 -- Name: products_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -325,7 +366,7 @@ CREATE SEQUENCE public.stock_balance_id_seq
 ALTER SEQUENCE public.stock_balance_id_seq OWNER TO postgres;
 
 --
--- TOC entry 5004 (class 0 OID 0)
+-- TOC entry 5018 (class 0 OID 0)
 -- Dependencies: 229
 -- Name: stock_balance_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -368,7 +409,7 @@ CREATE SEQUENCE public.supplier_products_id_seq
 ALTER SEQUENCE public.supplier_products_id_seq OWNER TO postgres;
 
 --
--- TOC entry 5005 (class 0 OID 0)
+-- TOC entry 5019 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: supplier_products_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -415,7 +456,7 @@ CREATE SEQUENCE public.suppliers_id_seq
 ALTER SEQUENCE public.suppliers_id_seq OWNER TO postgres;
 
 --
--- TOC entry 5006 (class 0 OID 0)
+-- TOC entry 5020 (class 0 OID 0)
 -- Dependencies: 233
 -- Name: suppliers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -458,7 +499,7 @@ CREATE SEQUENCE public.users_id_seq
 ALTER SEQUENCE public.users_id_seq OWNER TO postgres;
 
 --
--- TOC entry 5007 (class 0 OID 0)
+-- TOC entry 5021 (class 0 OID 0)
 -- Dependencies: 235
 -- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -467,7 +508,7 @@ ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
 
 
 --
--- TOC entry 4743 (class 2604 OID 25188)
+-- TOC entry 4748 (class 2604 OID 25188)
 -- Name: accountings id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -475,7 +516,15 @@ ALTER TABLE ONLY public.accountings ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
--- TOC entry 4746 (class 2604 OID 25191)
+-- TOC entry 4782 (class 2604 OID 25322)
+-- Name: claim_reports id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.claim_reports ALTER COLUMN id SET DEFAULT nextval('public.claim_reports_id_seq'::regclass);
+
+
+--
+-- TOC entry 4751 (class 2604 OID 25191)
 -- Name: document_items id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -483,7 +532,7 @@ ALTER TABLE ONLY public.document_items ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
--- TOC entry 4749 (class 2604 OID 25192)
+-- TOC entry 4754 (class 2604 OID 25192)
 -- Name: documents id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -491,7 +540,7 @@ ALTER TABLE ONLY public.documents ALTER COLUMN id SET DEFAULT nextval('public.do
 
 
 --
--- TOC entry 4754 (class 2604 OID 25193)
+-- TOC entry 4759 (class 2604 OID 25193)
 -- Name: kpi id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -499,7 +548,7 @@ ALTER TABLE ONLY public.kpi ALTER COLUMN id SET DEFAULT nextval('public.kpi_id_s
 
 
 --
--- TOC entry 4764 (class 2604 OID 25194)
+-- TOC entry 4769 (class 2604 OID 25194)
 -- Name: products id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -507,7 +556,7 @@ ALTER TABLE ONLY public.products ALTER COLUMN id SET DEFAULT nextval('public.pro
 
 
 --
--- TOC entry 4767 (class 2604 OID 25195)
+-- TOC entry 4772 (class 2604 OID 25195)
 -- Name: storages id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -515,7 +564,7 @@ ALTER TABLE ONLY public.storages ALTER COLUMN id SET DEFAULT nextval('public.sto
 
 
 --
--- TOC entry 4775 (class 2604 OID 25196)
+-- TOC entry 4780 (class 2604 OID 25196)
 -- Name: users id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -523,7 +572,7 @@ ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_
 
 
 --
--- TOC entry 4770 (class 2604 OID 25197)
+-- TOC entry 4775 (class 2604 OID 25197)
 -- Name: vendor_products id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -531,7 +580,7 @@ ALTER TABLE ONLY public.vendor_products ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
--- TOC entry 4773 (class 2604 OID 25198)
+-- TOC entry 4778 (class 2604 OID 25198)
 -- Name: vendors id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -539,7 +588,7 @@ ALTER TABLE ONLY public.vendors ALTER COLUMN id SET DEFAULT nextval('public.supp
 
 
 --
--- TOC entry 4974 (class 0 OID 25092)
+-- TOC entry 4985 (class 0 OID 25092)
 -- Dependencies: 217
 -- Data for Name: accountings; Type: TABLE DATA; Schema: public; Owner: postgres
 --
@@ -566,11 +615,30 @@ COPY public.accountings (id, operation_date, operation_type, document_id, suppli
 26	2026-03-29	expense	71	11	160.00	0.00	Приход	4	2026-03-29 18:51:57.649344
 27	2026-03-29	expense	73	11	160.00	0.00	Приход	4	2026-03-29 18:53:47.472818
 28	2026-03-29	expense	75	11	160.00	0.00	Приход	4	2026-03-29 19:09:44.46286
+29	2026-03-31	expense	77	11	160.00	0.00	Приход	4	2026-03-31 01:01:52.179234
+30	2026-03-31	expense	79	11	160.00	0.00	Приход	4	2026-03-31 01:08:28.195263
+31	2026-03-31	expense	81	11	160.00	0.00	Приход	4	2026-03-31 01:24:31.741305
+32	2026-03-31	expense	83	11	160.00	0.00	Приход	4	2026-03-31 01:30:28.971524
+33	2026-03-31	expense	85	11	320.00	0.00	Приход	4	2026-03-31 01:32:49.461278
+34	2026-03-31	expense	87	11	160.00	0.00	Приход	4	2026-03-31 01:49:28.110466
+35	2026-03-31	expense	89	11	160.00	0.00	Приход	4	2026-03-31 11:09:05.532651
 \.
 
 
 --
--- TOC entry 4993 (class 0 OID 25308)
+-- TOC entry 5006 (class 0 OID 25319)
+-- Dependencies: 238
+-- Data for Name: claim_reports; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.claim_reports (id, document_id, marriage, deadline, quantity, created_at) FROM stdin;
+1	87	t	f	t	2026-03-31 01:49:28.120083+03
+2	89	t	f	t	2026-03-31 11:09:05.546709+03
+\.
+
+
+--
+-- TOC entry 5004 (class 0 OID 25308)
 -- Dependencies: 236
 -- Data for Name: claims; Type: TABLE DATA; Schema: public; Owner: postgres
 --
@@ -580,7 +648,7 @@ COPY public.claims (id, document_id, marriage, deadline, quantity, created_at) F
 
 
 --
--- TOC entry 4976 (class 0 OID 25120)
+-- TOC entry 4987 (class 0 OID 25120)
 -- Dependencies: 219
 -- Data for Name: document_items; Type: TABLE DATA; Schema: public; Owner: postgres
 --
@@ -607,11 +675,18 @@ COPY public.document_items (id, document_id, product_id, quantity, price, vat_ra
 34	70	15	2.00	160.00	0.00	2026-03-29 18:51:47.185123
 35	72	15	2.00	160.00	0.00	2026-03-29 18:53:29.342458
 36	74	15	2.00	160.00	0.00	2026-03-29 19:09:28.1899
+37	76	15	2.00	160.00	0.00	2026-03-31 01:01:42.755759
+38	78	15	2.00	160.00	0.00	2026-03-31 01:08:18.148793
+39	80	15	2.00	160.00	0.00	2026-03-31 01:24:23.781294
+40	82	15	2.00	160.00	0.00	2026-03-31 01:30:18.782452
+41	84	15	3.00	160.00	0.00	2026-03-31 01:32:40.661951
+42	86	15	2.00	160.00	0.00	2026-03-31 01:49:18.401442
+43	88	15	2.00	160.00	0.00	2026-03-31 11:08:53.53104
 \.
 
 
 --
--- TOC entry 4978 (class 0 OID 25126)
+-- TOC entry 4989 (class 0 OID 25126)
 -- Dependencies: 221
 -- Data for Name: documents; Type: TABLE DATA; Schema: public; Owner: postgres
 --
@@ -659,11 +734,25 @@ COPY public.documents (id, doc_number, doc_type, doc_date, vendor_id, user_id, s
 72	ДОГ-1774799595522-11	Договор	2026-04-10	11	4	Частично исполнен	320.00	RUB	Поставщик: ООО ПромЭнергоСнаб\n\nСостав поставки:\n- фа: 2 шт × 160₽ = 320₽\n\n---\nАдрес доставки: г. Нижний Новгород, ул. Транспортная, д. 8\nУсловия оплаты: 100% предоплата\nДата доставки: 2026-04-10\n\n\nПриёмка завершена. Создан документ: PR-1774799627440\nСоздана претензия.	2026-03-29 18:53:29.287735	\N	2026-05-10	7	\N
 75	PR-1774800584419	Приход	2026-03-29	11	4	Расхождение	160.00	RUB	Приход товаров по договору ДОГ-1774800556658-11\n	2026-03-29 19:09:44.424067	\N	2026-04-28	7	\N
 74	ДОГ-1774800556658-11	Договор	2026-04-15	11	4	Частично исполнен	320.00	RUB	Поставщик: ООО ПромЭнергоСнаб\n\nСостав поставки:\n- фа: 2 шт × 160₽ = 320₽\n\n---\nАдрес доставки: г. Нижний Новгород, ул. Транспортная, д. 8\nУсловия оплаты: 100% предоплата\nДата доставки: 2026-04-15\n\n\nПриёмка завершена. Создан документ: PR-1774800584419\nСоздана претензия.	2026-03-29 19:09:28.153249	\N	2026-05-15	7	\N
+83	PR-1774909828931	Приход	2026-03-31	11	4	Расхождение	160.00	RUB	Приход товаров по договору ДОГ-1774909804025-11\n	2026-03-31 01:30:28.936444	\N	2026-04-30	7	\N
+77	PR-1774908112160	Приход	2026-03-31	11	4	Расхождение	160.00	RUB	Приход товаров по договору ДОГ-1774908082850-11\n	2026-03-31 01:01:52.161237	\N	2026-04-30	7	\N
+76	ДОГ-1774908082850-11	Договор	2026-04-10	11	4	Частично исполнен	320.00	RUB	Поставщик: ООО ПромЭнергоСнаб\n\nСостав поставки:\n- фа: 2 шт × 160₽ = 320₽\n\n---\nАдрес доставки: г. Нижний Новгород, ул. Транспортная, д. 8\nУсловия оплаты: 100% предоплата\nДата доставки: 2026-04-10\n\n\nПриёмка завершена. Создан документ: PR-1774908112160\nСоздана претензия.	2026-03-31 01:01:42.721781	\N	2026-05-10	7	\N
+82	ДОГ-1774909804025-11	Договор	2026-04-12	11	4	Частично исполнен	320.00	RUB	Поставщик: ООО ПромЭнергоСнаб\n\nСостав поставки:\n- фа: 2 шт × 160₽ = 320₽\n\n---\nАдрес доставки: г. Нижний Новгород, ул. Транспортная, д. 8\nУсловия оплаты: 100% предоплата\nДата доставки: 2026-04-12\n\n\nПриёмка завершена. Создан документ: PR-1774909828931\nСоздана претензия.	2026-03-31 01:30:18.644621	\N	2026-05-12	7	\N
+79	PR-1774908508170	Приход	2026-03-31	11	4	Расхождение	160.00	RUB	Приход товаров по договору ДОГ-1774908482753-11\n	2026-03-31 01:08:28.172272	\N	2026-04-30	7	\N
+78	ДОГ-1774908482753-11	Договор	2026-04-10	11	4	Частично исполнен	320.00	RUB	Поставщик: ООО ПромЭнергоСнаб\n\nСостав поставки:\n- фа: 2 шт × 160₽ = 320₽\n\n---\nАдрес доставки: г. Нижний Новгород, ул. Транспортная, д. 8\nУсловия оплаты: 100% предоплата\nДата доставки: 2026-04-10\n\n\nПриёмка завершена. Создан документ: PR-1774908508170\nСоздана претензия.	2026-03-31 01:08:18.101718	\N	2026-05-10	7	\N
+81	PR-1774909471725	Приход	2026-03-31	11	4	Расхождение	160.00	RUB	Приход товаров по договору ДОГ-1774909448545-11\n	2026-03-31 01:24:31.727258	\N	2026-04-30	7	\N
+80	ДОГ-1774909448545-11	Договор	2026-04-11	11	4	Частично исполнен	320.00	RUB	Поставщик: ООО ПромЭнергоСнаб\n\nСостав поставки:\n- фа: 2 шт × 160₽ = 320₽\n\n---\nАдрес доставки: г. Нижний Новгород, ул. Транспортная, д. 8\nУсловия оплаты: 100% предоплата\nДата доставки: 2026-04-11\n\n\nПриёмка завершена. Создан документ: PR-1774909471725\nСоздана претензия.	2026-03-31 01:24:23.759205	\N	2026-05-11	7	\N
+87	PR-1774910968076	Приход	2026-03-31	11	4	Расхождение	160.00	RUB	Приход товаров по договору ДОГ-1774910946559-11\n	2026-03-31 01:49:28.077945	\N	2026-04-30	7	\N
+86	ДОГ-1774910946559-11	Договор	2026-04-14	11	4	Частично исполнен	320.00	RUB	Поставщик: ООО ПромЭнергоСнаб\n\nСостав поставки:\n- фа: 2 шт × 160₽ = 320₽\n\n---\nАдрес доставки: г. Нижний Новгород, ул. Транспортная, д. 8\nУсловия оплаты: 100% предоплата\nДата доставки: 2026-04-14\n\n\nПриёмка завершена. Создан документ: PR-1774910968076\nСоздана претензия.	2026-03-31 01:49:18.255731	\N	2026-05-14	7	\N
+85	PR-1774909969419	Приход	2026-03-31	11	4	Расхождение	320.00	RUB	Приход товаров по договору ДОГ-1774909949341-11\n	2026-03-31 01:32:49.421504	\N	2026-04-30	7	\N
+84	ДОГ-1774909949341-11	Договор	2026-04-13	11	4	Частично исполнен	480.00	RUB	Поставщик: ООО ПромЭнергоСнаб\n\nСостав поставки:\n- фа: 3 шт × 160₽ = 480₽\n\n---\nАдрес доставки: г. Нижний Новгород, ул. Транспортная, д. 8\nУсловия оплаты: 100% предоплата\nДата доставки: 2026-04-13\n\n\nПриёмка завершена. Создан документ: PR-1774909969419\nСоздана претензия.	2026-03-31 01:32:40.621258	\N	2026-05-13	7	\N
+88	ДОГ-1774944521951-11	Договор	2026-04-16	11	4	Частично исполнен	320.00	RUB	Поставщик: ООО ПромЭнергоСнаб\n\nСостав поставки:\n- фа: 2 шт × 160₽ = 320₽\n\n---\nАдрес доставки: г. Нижний Новгород, ул. Транспортная, д. 8\nУсловия оплаты: 100% предоплата\nДата доставки: 2026-04-16\n\n\nПриёмка завершена. Создан документ: PR-1774944545477\nСоздана претензия.	2026-03-31 11:08:53.299287	\N	2026-05-16	7	\N
+89	PR-1774944545477	Приход	2026-03-31	11	4	Расхождение	160.00	RUB	Приход товаров по договору ДОГ-1774944521951-11\n	2026-03-31 11:09:05.477266	\N	2026-04-30	7	\N
 \.
 
 
 --
--- TOC entry 4980 (class 0 OID 25138)
+-- TOC entry 4991 (class 0 OID 25138)
 -- Dependencies: 223
 -- Data for Name: kpi; Type: TABLE DATA; Schema: public; Owner: postgres
 --
@@ -673,18 +762,18 @@ COPY public.kpi (id, period_date, period_type, total_purchases_amount, avg_deliv
 
 
 --
--- TOC entry 4982 (class 0 OID 25152)
+-- TOC entry 4993 (class 0 OID 25152)
 -- Dependencies: 225
 -- Data for Name: money; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
 COPY public.money (money) FROM stdin;
-55200
+53920
 \.
 
 
 --
--- TOC entry 4983 (class 0 OID 25155)
+-- TOC entry 4994 (class 0 OID 25155)
 -- Dependencies: 226
 -- Data for Name: products; Type: TABLE DATA; Schema: public; Owner: postgres
 --
@@ -695,18 +784,18 @@ COPY public.products (id, article, name, description, unit, category, min_stock,
 
 
 --
--- TOC entry 4985 (class 0 OID 25163)
+-- TOC entry 4996 (class 0 OID 25163)
 -- Dependencies: 228
 -- Data for Name: storages; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
 COPY public.storages (id, product_id, quantity, last_receipt_date, last_receipt_document_id, updated_at) FROM stdin;
-8	15	280.00	2026-03-29 19:09:44.461479	75	2026-03-29 19:09:44.461479
+8	15	288.00	2026-03-31 11:09:05.531613	89	2026-03-31 11:09:05.531613
 \.
 
 
 --
--- TOC entry 4991 (class 0 OID 25182)
+-- TOC entry 5002 (class 0 OID 25182)
 -- Dependencies: 234
 -- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: postgres
 --
@@ -718,7 +807,7 @@ COPY public.users (id, login, password, full_name, role, created_at) FROM stdin;
 
 
 --
--- TOC entry 4987 (class 0 OID 25169)
+-- TOC entry 4998 (class 0 OID 25169)
 -- Dependencies: 230
 -- Data for Name: vendor_products; Type: TABLE DATA; Schema: public; Owner: postgres
 --
@@ -729,7 +818,7 @@ COPY public.vendor_products (id, vendor_id, product_id, vendor_price, currency, 
 
 
 --
--- TOC entry 4989 (class 0 OID 25175)
+-- TOC entry 5000 (class 0 OID 25175)
 -- Dependencies: 232
 -- Data for Name: vendors; Type: TABLE DATA; Schema: public; Owner: postgres
 --
@@ -742,34 +831,43 @@ COPY public.vendors (id, company_name, contact_person, phone, email, address, in
 
 
 --
--- TOC entry 5008 (class 0 OID 0)
+-- TOC entry 5022 (class 0 OID 0)
 -- Dependencies: 218
 -- Name: accounting_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.accounting_id_seq', 28, true);
+SELECT pg_catalog.setval('public.accounting_id_seq', 35, true);
 
 
 --
--- TOC entry 5009 (class 0 OID 0)
+-- TOC entry 5023 (class 0 OID 0)
+-- Dependencies: 237
+-- Name: claim_reports_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.claim_reports_id_seq', 2, true);
+
+
+--
+-- TOC entry 5024 (class 0 OID 0)
 -- Dependencies: 220
 -- Name: document_items_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.document_items_id_seq', 36, true);
+SELECT pg_catalog.setval('public.document_items_id_seq', 43, true);
 
 
 --
--- TOC entry 5010 (class 0 OID 0)
+-- TOC entry 5025 (class 0 OID 0)
 -- Dependencies: 222
 -- Name: documents_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.documents_id_seq', 75, true);
+SELECT pg_catalog.setval('public.documents_id_seq', 89, true);
 
 
 --
--- TOC entry 5011 (class 0 OID 0)
+-- TOC entry 5026 (class 0 OID 0)
 -- Dependencies: 224
 -- Name: kpi_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -778,7 +876,7 @@ SELECT pg_catalog.setval('public.kpi_id_seq', 1, false);
 
 
 --
--- TOC entry 5012 (class 0 OID 0)
+-- TOC entry 5027 (class 0 OID 0)
 -- Dependencies: 227
 -- Name: products_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -787,7 +885,7 @@ SELECT pg_catalog.setval('public.products_id_seq', 15, true);
 
 
 --
--- TOC entry 5013 (class 0 OID 0)
+-- TOC entry 5028 (class 0 OID 0)
 -- Dependencies: 229
 -- Name: stock_balance_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -796,7 +894,7 @@ SELECT pg_catalog.setval('public.stock_balance_id_seq', 8, true);
 
 
 --
--- TOC entry 5014 (class 0 OID 0)
+-- TOC entry 5029 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: supplier_products_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -805,7 +903,7 @@ SELECT pg_catalog.setval('public.supplier_products_id_seq', 28, true);
 
 
 --
--- TOC entry 5015 (class 0 OID 0)
+-- TOC entry 5030 (class 0 OID 0)
 -- Dependencies: 233
 -- Name: suppliers_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -814,7 +912,7 @@ SELECT pg_catalog.setval('public.suppliers_id_seq', 11, true);
 
 
 --
--- TOC entry 5016 (class 0 OID 0)
+-- TOC entry 5031 (class 0 OID 0)
 -- Dependencies: 235
 -- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -823,7 +921,7 @@ SELECT pg_catalog.setval('public.users_id_seq', 4, true);
 
 
 --
--- TOC entry 4783 (class 2606 OID 25200)
+-- TOC entry 4792 (class 2606 OID 25200)
 -- Name: accountings accounting_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -832,7 +930,7 @@ ALTER TABLE ONLY public.accountings
 
 
 --
--- TOC entry 4820 (class 2606 OID 25314)
+-- TOC entry 4829 (class 2606 OID 25314)
 -- Name: claims claim_report_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -841,7 +939,16 @@ ALTER TABLE ONLY public.claims
 
 
 --
--- TOC entry 4787 (class 2606 OID 25208)
+-- TOC entry 4831 (class 2606 OID 25327)
+-- Name: claim_reports claim_reports_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.claim_reports
+    ADD CONSTRAINT claim_reports_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4796 (class 2606 OID 25208)
 -- Name: document_items document_items_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -850,7 +957,7 @@ ALTER TABLE ONLY public.document_items
 
 
 --
--- TOC entry 4790 (class 2606 OID 25210)
+-- TOC entry 4799 (class 2606 OID 25210)
 -- Name: documents documents_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -859,7 +966,7 @@ ALTER TABLE ONLY public.documents
 
 
 --
--- TOC entry 4794 (class 2606 OID 25212)
+-- TOC entry 4803 (class 2606 OID 25212)
 -- Name: kpi kpi_period_date_period_type_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -868,7 +975,7 @@ ALTER TABLE ONLY public.kpi
 
 
 --
--- TOC entry 4796 (class 2606 OID 25214)
+-- TOC entry 4805 (class 2606 OID 25214)
 -- Name: kpi kpi_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -877,7 +984,7 @@ ALTER TABLE ONLY public.kpi
 
 
 --
--- TOC entry 4798 (class 2606 OID 25216)
+-- TOC entry 4807 (class 2606 OID 25216)
 -- Name: products products_article_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -886,7 +993,7 @@ ALTER TABLE ONLY public.products
 
 
 --
--- TOC entry 4800 (class 2606 OID 25218)
+-- TOC entry 4809 (class 2606 OID 25218)
 -- Name: products products_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -895,7 +1002,7 @@ ALTER TABLE ONLY public.products
 
 
 --
--- TOC entry 4802 (class 2606 OID 25220)
+-- TOC entry 4811 (class 2606 OID 25220)
 -- Name: storages stock_balance_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -904,7 +1011,7 @@ ALTER TABLE ONLY public.storages
 
 
 --
--- TOC entry 4804 (class 2606 OID 25222)
+-- TOC entry 4813 (class 2606 OID 25222)
 -- Name: storages stock_balance_product_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -913,7 +1020,7 @@ ALTER TABLE ONLY public.storages
 
 
 --
--- TOC entry 4808 (class 2606 OID 25224)
+-- TOC entry 4817 (class 2606 OID 25224)
 -- Name: vendor_products supplier_products_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -922,7 +1029,7 @@ ALTER TABLE ONLY public.vendor_products
 
 
 --
--- TOC entry 4810 (class 2606 OID 25226)
+-- TOC entry 4819 (class 2606 OID 25226)
 -- Name: vendor_products supplier_products_supplier_id_product_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -931,7 +1038,7 @@ ALTER TABLE ONLY public.vendor_products
 
 
 --
--- TOC entry 4812 (class 2606 OID 25228)
+-- TOC entry 4821 (class 2606 OID 25228)
 -- Name: vendors suppliers_inn_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -940,7 +1047,7 @@ ALTER TABLE ONLY public.vendors
 
 
 --
--- TOC entry 4814 (class 2606 OID 25230)
+-- TOC entry 4823 (class 2606 OID 25230)
 -- Name: vendors suppliers_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -949,7 +1056,7 @@ ALTER TABLE ONLY public.vendors
 
 
 --
--- TOC entry 4816 (class 2606 OID 25232)
+-- TOC entry 4825 (class 2606 OID 25232)
 -- Name: users users_login_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -958,7 +1065,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 4818 (class 2606 OID 25234)
+-- TOC entry 4827 (class 2606 OID 25234)
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -967,7 +1074,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 4784 (class 1259 OID 25235)
+-- TOC entry 4793 (class 1259 OID 25235)
 -- Name: idx_accounting_document; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -975,7 +1082,7 @@ CREATE INDEX idx_accounting_document ON public.accountings USING btree (document
 
 
 --
--- TOC entry 4785 (class 1259 OID 25236)
+-- TOC entry 4794 (class 1259 OID 25236)
 -- Name: idx_accounting_supplier; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -983,7 +1090,7 @@ CREATE INDEX idx_accounting_supplier ON public.accountings USING btree (supplier
 
 
 --
--- TOC entry 4788 (class 1259 OID 25237)
+-- TOC entry 4797 (class 1259 OID 25237)
 -- Name: idx_document_items_document; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -991,7 +1098,7 @@ CREATE INDEX idx_document_items_document ON public.document_items USING btree (d
 
 
 --
--- TOC entry 4791 (class 1259 OID 25238)
+-- TOC entry 4800 (class 1259 OID 25238)
 -- Name: idx_documents_supplier; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -999,7 +1106,7 @@ CREATE INDEX idx_documents_supplier ON public.documents USING btree (vendor_id, 
 
 
 --
--- TOC entry 4792 (class 1259 OID 25239)
+-- TOC entry 4801 (class 1259 OID 25239)
 -- Name: idx_documents_type; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -1007,7 +1114,7 @@ CREATE INDEX idx_documents_type ON public.documents USING btree (doc_type, doc_d
 
 
 --
--- TOC entry 4805 (class 1259 OID 25240)
+-- TOC entry 4814 (class 1259 OID 25240)
 -- Name: idx_supplier_products_product; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -1015,7 +1122,7 @@ CREATE INDEX idx_supplier_products_product ON public.vendor_products USING btree
 
 
 --
--- TOC entry 4806 (class 1259 OID 25241)
+-- TOC entry 4815 (class 1259 OID 25241)
 -- Name: idx_supplier_products_supplier; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -1023,7 +1130,7 @@ CREATE INDEX idx_supplier_products_supplier ON public.vendor_products USING btre
 
 
 --
--- TOC entry 4821 (class 2606 OID 25242)
+-- TOC entry 4832 (class 2606 OID 25242)
 -- Name: accountings accounting_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1032,7 +1139,7 @@ ALTER TABLE ONLY public.accountings
 
 
 --
--- TOC entry 4822 (class 2606 OID 25247)
+-- TOC entry 4833 (class 2606 OID 25247)
 -- Name: accountings accounting_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1041,7 +1148,7 @@ ALTER TABLE ONLY public.accountings
 
 
 --
--- TOC entry 4823 (class 2606 OID 25277)
+-- TOC entry 4834 (class 2606 OID 25277)
 -- Name: document_items document_items_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1050,7 +1157,7 @@ ALTER TABLE ONLY public.document_items
 
 
 --
--- TOC entry 4824 (class 2606 OID 25282)
+-- TOC entry 4835 (class 2606 OID 25282)
 -- Name: documents documents_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1059,7 +1166,7 @@ ALTER TABLE ONLY public.documents
 
 
 --
--- TOC entry 4825 (class 2606 OID 25287)
+-- TOC entry 4836 (class 2606 OID 25287)
 -- Name: documents documents_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1068,7 +1175,7 @@ ALTER TABLE ONLY public.documents
 
 
 --
--- TOC entry 4826 (class 2606 OID 25292)
+-- TOC entry 4837 (class 2606 OID 25292)
 -- Name: storages stock_balance_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1077,7 +1184,7 @@ ALTER TABLE ONLY public.storages
 
 
 --
--- TOC entry 4827 (class 2606 OID 25297)
+-- TOC entry 4838 (class 2606 OID 25297)
 -- Name: vendor_products supplier_products_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1086,7 +1193,7 @@ ALTER TABLE ONLY public.vendor_products
 
 
 --
--- TOC entry 4828 (class 2606 OID 25302)
+-- TOC entry 4839 (class 2606 OID 25302)
 -- Name: vendor_products supplier_products_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1094,11 +1201,11 @@ ALTER TABLE ONLY public.vendor_products
     ADD CONSTRAINT supplier_products_supplier_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id) ON DELETE CASCADE;
 
 
--- Completed on 2026-03-29 19:43:12
+-- Completed on 2026-03-31 11:11:32
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict FQmDuowYzHERgqPKgSgnLjweH3fESUSjt4p7aSkbEPBN8dyDb3uYrduK0xy2MP4
+\unrestrict urSt6KgoJP8k9LjsEwhMOf0S2exCBEFLhn5ccKHaoB46rnrYNF0PiBDWUDQ3cRx
 

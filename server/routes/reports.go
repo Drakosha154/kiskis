@@ -45,9 +45,11 @@ func GetReportsSummary(c *gin.Context) {
 			dateFrom, dateTo+" 23:59:59", "Приход").
 		Scan(&summary.TotalSpent)
 
-	// 3. Количество претензий - теперь из таблицы claims
+	// 3. Количество претензий - ИСПРАВЛЕНО: преобразуем даты в timestamp
+	startDate := dateFrom + " 00:00:00"
+	endDate := dateTo + " 23:59:59"
 	database.DB.Table("claims").
-		Where("created_at BETWEEN ? AND ?", dateFrom, dateTo+" 23:59:59").
+		Where("created_at BETWEEN ? AND ?", startDate, endDate).
 		Count(&summary.ClaimsCount)
 
 	// 4. Уровень задолженности
