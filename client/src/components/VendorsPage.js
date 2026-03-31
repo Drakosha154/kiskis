@@ -47,6 +47,14 @@ function VendorsPage({ setError }) {
     delivery_days: ''
   });
 
+  const [validationErrors, setValidationErrors] = useState({
+    article: '',
+    name: '',
+    unit: '',
+    min_stock: '',
+    vendor_price: ''
+  });
+
   useEffect(() => {
     getVendors();
     getProducts();
@@ -236,6 +244,60 @@ function VendorsPage({ setError }) {
     try {
       setError('');
       
+      // Валидация данных товара
+      const errors = {
+        article: '',
+        name: '',
+        unit: '',
+        min_stock: '',
+        vendor_price: ''
+      };
+      
+      let isValid = true;
+      
+      // Проверка артикула
+      if (!newProduct.article || newProduct.article.trim() === '') {
+        errors.article = 'Артикул обязателен для заполнения';
+        isValid = false;
+      } else if (newProduct.article.length < 2) {
+        errors.article = 'Артикул должен содержать минимум 2 символа';
+        isValid = false;
+      }
+      
+      // Проверка наименования
+      if (!newProduct.name || newProduct.name.trim() === '') {
+        errors.name = 'Наименование обязательно для заполнения';
+        isValid = false;
+      } else if (newProduct.name.length < 3) {
+        errors.name = 'Наименование должно содержать минимум 3 символа';
+        isValid = false;
+      }
+      
+      // Проверка единицы измерения
+      if (!newProduct.unit || newProduct.unit.trim() === '') {
+        errors.unit = 'Единица измерения обязательна';
+        isValid = false;
+      }
+      
+      // Проверка минимального остатка
+      if (newProduct.min_stock < 0) {
+        errors.min_stock = 'Минимальный остаток не может быть отрицательным';
+        isValid = false;
+      }
+      
+      // Проверка цены поставщика
+      if (!newProductVendorPrice.vendor_price || parseFloat(newProductVendorPrice.vendor_price) <= 0) {
+        errors.vendor_price = 'Цена поставщика должна быть больше 0';
+        isValid = false;
+      }
+      
+      setValidationErrors(errors);
+      
+      if (!isValid) {
+        setError('Пожалуйста, исправьте ошибки в форме');
+        return;
+      }
+      
       const newProductId = await createNewProduct();
       
       if (!newProductId) {
@@ -406,6 +468,13 @@ function VendorsPage({ setError }) {
       vendor_price: '',
       currency: 'RUB',
       delivery_days: ''
+    });
+    setValidationErrors({
+      article: '',
+      name: '',
+      unit: '',
+      min_stock: '',
+      vendor_price: ''
     });
   };
 
@@ -792,24 +861,32 @@ function VendorsPage({ setError }) {
                     <Form onSubmit={addNewProduct}>
                       <h5>Создать новый товар</h5>
                       <Form.Group className="mb-3">
-                        <Form.Label>Артикул</Form.Label>
+                        <Form.Label>Артикул <span className="text-danger">*</span></Form.Label>
                         <Form.Control
                           type="text"
                           value={newProduct.article}
                           onChange={(e) => setNewProduct({...newProduct, article: e.target.value})}
                           required
                           placeholder="Например: ACC-001"
+                          isInvalid={!!validationErrors.article}
                         />
+                        <Form.Control.Feedback type="invalid">
+                          {validationErrors.article}
+                        </Form.Control.Feedback>
                       </Form.Group>
 
                       <Form.Group className="mb-3">
-                        <Form.Label>Наименование товара</Form.Label>
+                        <Form.Label>Наименование товара <span className="text-danger">*</span></Form.Label>
                         <Form.Control
                           type="text"
                           value={newProduct.name}
                           onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
                           required
+                          isInvalid={!!validationErrors.name}
                         />
+                        <Form.Control.Feedback type="invalid">
+                          {validationErrors.name}
+                        </Form.Control.Feedback>
                       </Form.Group>
 
                       <Form.Group className="mb-3">
@@ -825,11 +902,12 @@ function VendorsPage({ setError }) {
                       <Row>
                         <Col>
                           <Form.Group className="mb-3">
-                            <Form.Label>Единица измерения</Form.Label>
+                            <Form.Label>Единица измерения <span className="text-danger">*</span></Form.Label>
                             <Form.Select
                               value={newProduct.unit}
                               onChange={(e) => setNewProduct({...newProduct, unit: e.target.value})}
                               required
+                              isInvalid={!!validationErrors.unit}
                             >
                               <option value="шт">Штука (шт)</option>
                               <option value="кг">Килограмм (кг)</option>
@@ -837,6 +915,9 @@ function VendorsPage({ setError }) {
                               <option value="уп">Упаковка (уп)</option>
                               <option value="компл">Комплект (компл)</option>
                             </Form.Select>
+                            <Form.Control.Feedback type="invalid">
+                              {validationErrors.unit}
+                            </Form.Control.Feedback>
                           </Form.Group>
                         </Col>
                         <Col>
@@ -853,20 +934,24 @@ function VendorsPage({ setError }) {
                       </Row>
 
                       <Form.Group className="mb-3">
-                        <Form.Label>Минимальный остаток</Form.Label>
+                        <Form.Label>Минимальный остаток <span className="text-danger">*</span></Form.Label>
                         <Form.Control
                           type="number"
                           min="0"
                           value={newProduct.min_stock}
                           onChange={(e) => setNewProduct({...newProduct, min_stock: parseInt(e.target.value) || 0})}
+                          isInvalid={!!validationErrors.min_stock}
                         />
+                        <Form.Control.Feedback type="invalid">
+                          {validationErrors.min_stock}
+                        </Form.Control.Feedback>
                       </Form.Group>
 
                       <hr />
                       <h6>Цена для поставщика {selectedVendor?.Company_name}</h6>
 
                       <Form.Group className="mb-3">
-                        <Form.Label>Цена поставщика</Form.Label>
+                        <Form.Label>Цена поставщика <span className="text-danger">*</span></Form.Label>
                         <Form.Control
                           type="number"
                           step="0.01"
@@ -874,7 +959,11 @@ function VendorsPage({ setError }) {
                           value={newProductVendorPrice.vendor_price}
                           onChange={(e) => setNewProductVendorPrice({...newProductVendorPrice, vendor_price: e.target.value})}
                           required
+                          isInvalid={!!validationErrors.vendor_price}
                         />
+                        <Form.Control.Feedback type="invalid">
+                          {validationErrors.vendor_price}
+                        </Form.Control.Feedback>
                       </Form.Group>
 
                       <Form.Group className="mb-3">

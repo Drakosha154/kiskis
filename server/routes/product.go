@@ -17,9 +17,9 @@ func NewProducts(c *gin.Context) {
 	var input struct {
 		Article     string `json:"article" binding:"required"`
 		Name        string `json:"name" binding:"required"`
-		Description string `json:"description" binding:"required"`
+		Description string `json:"description"`
 		Unit        string `json:"unit" binding:"required"`
-		Category    string `json:"category" binding:"required"`
+		Category    string `json:"category"`
 		Min_stock   int    `json:"min_stock" binding:"required"`
 	}
 
@@ -105,9 +105,9 @@ func UpdProductByID(c *gin.Context) {
 	var input struct {
 		Article     string `json:"article" binding:"required"`
 		Name        string `json:"name" binding:"required"`
-		Description string `json:"description" binding:"required"`
+		Description string `json:"description"`
 		Unit        string `json:"unit" binding:"required"`
-		Category    string `json:"category" binding:"required"`
+		Category    string `json:"category"`
 		Min_stock   int    `json:"min_stock" binding:"required"`
 	}
 

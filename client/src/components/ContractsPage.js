@@ -18,6 +18,12 @@ function NewContractPage({ setError }) {
     payment_terms: 'prepaid',
     delivery_address: ''
   });
+  const [validationErrors, setValidationErrors] = useState({
+    doc_number: '',
+    delivery_date: '',
+    delivery_address: ''
+  });
+
 
   useEffect(() => {
     fetchProducts();
@@ -168,13 +174,75 @@ function NewContractPage({ setError }) {
     return item?.availableVendors || [];
   };
 
+  const validateContractData = () => {
+  const errors = {
+    doc_number: '',
+    delivery_date: '',
+    delivery_address: ''
+  };
+  
+  let isValid = true;
+  
+  // Проверка номера договора
+  if (!contractData.doc_number || contractData.doc_number.trim() === '') {
+    errors.doc_number = 'Поле обязательно для заполнения';
+    isValid = false;
+  }
+  
+ // Проверка даты поставки
+  if (!contractData.delivery_date || contractData.delivery_date.trim() === '') {
+    errors.delivery_date = 'Поле обязательно для заполнения';
+    isValid = false;
+  } else {
+    // НОВОЕ: Проверка что дата не раньше текущего дня
+    const selectedDate = new Date(contractData.delivery_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Сбрасываем время для корректного сравнения
+    
+    if (selectedDate < today) {
+      errors.delivery_date = 'Дата поставки не может быть раньше текущего дня';
+      isValid = false;
+    }
+  }
+  
+  // Проверка адреса доставки
+  if (!contractData.delivery_address || contractData.delivery_address.trim() === '') {
+    errors.delivery_address = 'Поле обязательно для заполнения';
+    isValid = false;
+  }
+  
+  setValidationErrors(errors);
+  return isValid;
+};
+
 const handleSubmit = async () => {
+  // Валидация полей формы
+  if (!validateContractData()) {
+    alert('Пожалуйста, заполните все обязательные поля');
+    return;
+  }
+
   // Проверка заполненности
   for (const item of contractItems) {
     if (item.total_allocated < item.required_quantity) {
       alert(`Товар "${item.product_name}" распределен не полностью (${item.total_allocated} из ${item.required_quantity})`);
       return;
     }
+  }
+
+  // НОВОЕ: Предупреждение о списании средств при предоплате
+  const grandTotal = calculateGrandTotal();
+  if (contractData.payment_terms === 'prepaid') {
+    const confirmed = window.confirm(
+      `При создании договора будет списана полная сумма ${grandTotal.toFixed(2)}₽ из бюджета.\n\nПродолжить?`
+    );
+    if (!confirmed) return;
+  } else if (contractData.payment_terms === 'partial') {
+    const prepayment = grandTotal * 0.5;
+    const confirmed = window.confirm(
+      `При создании договора будет списано 50% суммы (${prepayment.toFixed(2)}₽) из бюджета.\nОставшиеся 50% (${prepayment.toFixed(2)}₽) будут списаны при приёмке товара.\n\nПродолжить?`
+    );
+    if (!confirmed) return;
   }
 
   const token = localStorage.getItem('token');
@@ -224,9 +292,10 @@ const handleSubmit = async () => {
         doc_type: 'Договор',
         doc_date: contractData.delivery_date,
         vendor_id: vendorGroup.vendor_id,
-        status: 'Черновик',
+        status: 'Утверждён',
         total_amount: vendorGroup.total_amount,
         description: `Поставщик: ${vendorGroup.vendor_name}\n\nСостав поставки:\n${itemsDescription}\n\n---\nАдрес доставки: ${contractData.delivery_address}\nУсловия оплаты: ${getPaymentTermsText(contractData.payment_terms)}\nДата доставки: ${contractData.delivery_date}\n${contractData.description}`,
+        payment_terms: contractData.payment_terms, // НОВОЕ: передаём условия оплаты
       };
 
       // 1. Создаем документ
@@ -241,6 +310,12 @@ const handleSubmit = async () => {
 
       if (!docResponse.ok) {
         const errorData = await docResponse.json();
+        // НОВОЕ: Обработка ошибки недостатка средств
+        if (errorData.error && errorData.error.includes('Недостаточно средств')) {
+          alert(`❌ Недостаточно средств в бюджете!\n\nДоступно: ${errorData.available?.toFixed(2) || 0}₽\nТребуется: ${errorData.required?.toFixed(2) || 0}₽\nНехватка: ${errorData.shortage?.toFixed(2) || 0}₽\n\nПополните бюджет и попробуйте снова.`);
+        } else {
+          alert(`Ошибка создания договора: ${errorData.error || 'Неизвестная ошибка'}`);
+        }
         throw new Error(errorData.error || 'Failed to create document');
       }
       
@@ -443,32 +518,44 @@ const handleSubmit = async () => {
             <Card.Body>
               <Form>
                 <Form.Group className="mb-3">
-                  <Form.Label>Номер договора</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={contractData.doc_number}
-                    onChange={(e) => setContractData({...contractData, doc_number: e.target.value})}
-                  />
-                </Form.Group>
+  <Form.Label>Номер договора</Form.Label>
+  <Form.Control
+    type="text"
+    value={contractData.doc_number}
+    onChange={(e) => setContractData({...contractData, doc_number: e.target.value})}
+    isInvalid={!!validationErrors.doc_number}
+  />
+  <Form.Control.Feedback type="invalid">
+    {validationErrors.doc_number}
+  </Form.Control.Feedback>
+</Form.Group>
 
                 <Form.Group className="mb-3">
-                  <Form.Label>Дата поставки</Form.Label>
-                  <Form.Control
-                    type="date"
-                    value={contractData.delivery_date}
-                    onChange={(e) => setContractData({...contractData, delivery_date: e.target.value})}
-                  />
-                </Form.Group>
+  <Form.Label>Дата поставки</Form.Label>
+  <Form.Control
+    type="date"
+    value={contractData.delivery_date}
+    onChange={(e) => setContractData({...contractData, delivery_date: e.target.value})}
+    isInvalid={!!validationErrors.delivery_date}
+  />
+  <Form.Control.Feedback type="invalid">
+    {validationErrors.delivery_date}
+  </Form.Control.Feedback>
+</Form.Group>
 
                 <Form.Group className="mb-3">
-                  <Form.Label>Адрес доставки</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={contractData.delivery_address}
-                    onChange={(e) => setContractData({...contractData, delivery_address: e.target.value})}
-                    placeholder="Введите адрес доставки"
-                  />
-                </Form.Group>
+  <Form.Label>Адрес доставки</Form.Label>
+  <Form.Control
+    type="text"
+    value={contractData.delivery_address}
+    onChange={(e) => setContractData({...contractData, delivery_address: e.target.value})}
+    placeholder="Введите адрес доставки"
+    isInvalid={!!validationErrors.delivery_address}
+  />
+  <Form.Control.Feedback type="invalid">
+    {validationErrors.delivery_address}
+  </Form.Control.Feedback>
+</Form.Group>
 
                 <Form.Group className="mb-3">
                   <Form.Label>Условия оплаты</Form.Label>

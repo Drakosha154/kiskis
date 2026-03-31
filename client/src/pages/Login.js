@@ -22,6 +22,7 @@ const Login = ({ setAuth }) => {
       const data = await response.json();
       if (response.ok) {
         localStorage.setItem('token', data.token);
+        localStorage.setItem('userRole', data.user.role);
         console.log(data)
         setAuth(true);
         if (data.user.role === 'admin') {

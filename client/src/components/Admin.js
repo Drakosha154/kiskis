@@ -3,6 +3,76 @@ import React, { useState, useEffect } from 'react';
 import { Button, Form, Modal, Tab, Tabs, Table, Row, Col, Card, Alert, Badge, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 
+// ============================================================================
+// КОНСТАНТЫ
+// ============================================================================
+
+// Поля, которые автогенерируются и не должны редактироваться
+const AUTO_GENERATED_FIELDS = [
+  'ID', 'id', 
+  'CreatedAt', 'Created_at', 'created_at',
+  'UpdatedAt', 'Updated_at', 'updated_at',
+  'Last_receipt_date' // Это тоже автогенерируется
+];
+
+// Поля, которые вообще не показываем в формах
+const HIDDEN_FIELDS = ['Password', 'password', 'password_hash'];
+
+// Обязательные поля для каждой таблицы
+const REQUIRED_FIELDS = {
+  users: ['Login', 'Full_name', 'Role'],
+  vendors: ['Company_name'],
+  products: ['Article', 'Name', 'Unit'],
+  'vendor-products': ['Vendor_id', 'Product_id'],
+  documents: ['Doc_number', 'Doc_type', 'Doc_date'],
+  'document-items': ['document_id', 'product_id', 'quantity', 'price'],
+  accounting: ['Operation_date', 'Operation_type', 'Document_id', 'Amount'],
+  storage: ['Product_id', 'Quantity']
+};
+
+// Группировка полей по категориям для каждой таблицы
+const FIELD_GROUPS = {
+  users: [
+    { title: 'Основная информация', fields: ['Login', 'Full_name', 'Role'] }
+  ],
+  vendors: [
+    { title: 'Основная информация', fields: ['Company_name'] },
+    { title: 'Контактная информация', fields: ['Contact_person', 'Phone', 'Email', 'Address'] },
+    { title: 'Реквизиты', fields: ['Inn', 'Kpp', 'Payment_account', 'Bank_name'] }
+  ],
+  products: [
+    { title: 'Основная информация', fields: ['Article', 'Name', 'Unit'] },
+    { title: 'Дополнительная информация', fields: ['Description', 'Category', 'Min_stock'] }
+  ],
+  'vendor-products': [
+    { title: 'Связи', fields: ['Vendor_id', 'Product_id'] },
+    { title: 'Условия', fields: ['Vendor_price', 'Currency', 'Delivery_days'] }
+  ],
+  documents: [
+    { title: 'Основная информация', fields: ['Doc_number', 'Doc_type', 'Doc_date', 'Status'] },
+    { title: 'Связи', fields: ['Vendor_id', 'User_id'] },
+    { title: 'Финансовая информация', fields: ['Total_amount', 'Currency'] },
+    { title: 'Дополнительно', fields: ['Description'] }
+  ],
+  'document-items': [
+    { title: 'Основная информация', fields: ['document_id', 'product_id'] },
+    { title: 'Количество и цены', fields: ['quantity', 'price', 'vat_rate'] }
+  ],
+  accounting: [
+    { title: 'Основная информация', fields: ['Operation_date', 'Operation_type', 'Amount'] },
+    { title: 'Связи', fields: ['Document_id', 'Supplier_id'] },
+    { title: 'Дополнительно', fields: ['Vat_amount', 'Description', 'Created_by'] }
+  ],
+  storage: [
+    { title: 'Основная информация', fields: ['Product_id', 'Quantity'] },
+    { title: 'История', fields: ['Last_receipt_document_id'] }
+  ]
+};
+
+// ============================================================================
+// ОСНОВНОЙ КОМПОНЕНТ
+// ============================================================================
+
 function Admin({ setError }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -10,9 +80,11 @@ function Admin({ setError }) {
   const [tableData, setTableData] = useState([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [formData, setFormData] = useState({});
   const [createFormData, setCreateFormData] = useState({});
+  const [passwordData, setPasswordData] = useState({ newPassword: '', confirmPassword: '' });
   const [tableStructure, setTableStructure] = useState({});
   const [refresh, setRefresh] = useState(false);
   const navigate = useNavigate();
@@ -31,9 +103,23 @@ function Admin({ setError }) {
     { key: 'storage', name: 'Склад', endpoint: '/api/admin/storage' }
   ];
 
+  // ============================================================================
+  // EFFECTS
+  // ============================================================================
+
   useEffect(() => {
     checkUserRole();
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      loadTableData();
+    }
+  }, [activeTable, refresh, user]);
+
+  // ============================================================================
+  // ФУНКЦИИ ПРОВЕРКИ И ЗАГРУЗКИ ДАННЫХ
+  // ============================================================================
 
   const checkUserRole = async () => {
     const token = localStorage.getItem('token');
@@ -67,121 +153,118 @@ function Admin({ setError }) {
     }
   };
 
-  useEffect(() => {
-    if (user) {
-      loadTableData();
-    }
-  }, [activeTable, refresh, user]);
-
   const loadTableData = async () => {
-    const currentTable = tables.find(t => t.key === activeTable);
-    if (!currentTable) return;
+  const currentTable = tables.find(t => t.key === activeTable);
+  if (!currentTable) return;
 
-    const token = localStorage.getItem('token');
-    try {
-      const response = await fetch(`http://localhost:8080${currentTable.endpoint}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+  const token = localStorage.getItem('token');
+  try {
+    const response = await fetch(`http://localhost:8080${currentTable.endpoint}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
 
-      if (!response.ok) throw new Error('Ошибка загрузки данных');
+    if (!response.ok) throw new Error('Ошибка загрузки данных');
 
-      const data = await response.json();
-      setTableData(data.data || []);
-      
-      if (data.data && data.data.length > 0) {
-        detectTableStructure(data.data[0]);
-      } else {
-        detectTableStructureByTable(activeTable);
-      }
-    } catch (err) {
-      setError('Ошибка загрузки данных: ' + err.message);
-      setTableData([]);
-    }
-  };
+    const data = await response.json();
+    setTableData(data.data || []);
+    
+    // Всегда используем предопределенную структуру таблицы
+    detectTableStructureByTable(activeTable);
+  } catch (err) {
+    setError('Ошибка загрузки данных: ' + err.message);
+    setTableData([]);
+  }
+};
+
+  // ============================================================================
+  // ФУНКЦИИ ОПРЕДЕЛЕНИЯ СТРУКТУРЫ ТАБЛИЦЫ
+  // ============================================================================
 
   const detectTableStructure = (sample) => {
     const fields = {};
     Object.keys(sample).forEach(key => {
-      if (!key.includes('created_at') && !key.includes('updated_at') && key !== 'password' && key !== 'password_hash') {
+      // Исключаем автогенерируемые и скрытые поля
+      if (!AUTO_GENERATED_FIELDS.includes(key) && !HIDDEN_FIELDS.includes(key)) {
         fields[key] = {
           type: typeof sample[key],
-          label: getFieldLabel(key)
+          label: getFieldLabel(key),
+          required: REQUIRED_FIELDS[activeTable]?.includes(key) || false
         };
       }
     });
     setTableStructure(fields);
   };
 
-  const detectTableStructureByTable = (tableName) => {
-    const structures = {
-      users: {
-        login: { type: 'string', label: 'Логин' },
-        full_name: { type: 'string', label: 'ФИО' },
-        role: { type: 'select', label: 'Роль', options: availableRoles }
-      },
-      vendors: {
-        company_name: { type: 'string', label: 'Название компании' },
-        contact_person: { type: 'string', label: 'Контактное лицо' },
-        phone: { type: 'string', label: 'Телефон' },
-        email: { type: 'string', label: 'Email' },
-        address: { type: 'string', label: 'Адрес' },
-        inn: { type: 'string', label: 'ИНН' },
-        kpp: { type: 'string', label: 'КПП' },
-        payment_account: { type: 'string', label: 'Расчетный счет' },
-        bank_name: { type: 'string', label: 'Банк' }
-      },
-      products: {
-        article: { type: 'string', label: 'Артикул' },
-        name: { type: 'string', label: 'Название' },
-        description: { type: 'string', label: 'Описание' },
-        unit: { type: 'string', label: 'Ед. измерения' },
-        category: { type: 'string', label: 'Категория' },
-        min_stock: { type: 'number', label: 'Мин. остаток' }
-      },
-      'vendor-products': {
-        vendor_id: { type: 'number', label: 'ID поставщика' },
-        product_id: { type: 'number', label: 'ID товара' },
-        vendor_price: { type: 'number', label: 'Цена' },
-        currency: { type: 'string', label: 'Валюта' },
-        delivery_days: { type: 'number', label: 'Срок доставки' }
-      },
-      documents: {
-        doc_number: { type: 'string', label: 'Номер документа' },
-        doc_type: { type: 'string', label: 'Тип' },
-        doc_date: { type: 'string', label: 'Дата' },
-        vendor_id: { type: 'number', label: 'ID поставщика' },
-        user_id: { type: 'number', label: 'ID пользователя' },
-        status: { type: 'string', label: 'Статус' },
-        total_amount: { type: 'number', label: 'Сумма' },
-        currency: { type: 'string', label: 'Валюта' },
-        description: { type: 'string', label: 'Описание' }
-      },
-      'document-items': {
-        document_id: { type: 'number', label: 'ID документа' },
-        product_id: { type: 'number', label: 'ID товара' },
-        quantity: { type: 'number', label: 'Количество' },
-        price: { type: 'number', label: 'Цена' },
-        vat_rate: { type: 'number', label: 'НДС' }
-      },
-      accounting: {
-        operation_date: { type: 'string', label: 'Дата операции' },
-        operation_type: { type: 'string', label: 'Тип операции' },
-        document_id: { type: 'number', label: 'ID документа' },
-        supplier_id: { type: 'number', label: 'ID поставщика' },
-        amount: { type: 'number', label: 'Сумма' },
-        vat_amount: { type: 'number', label: 'Сумма НДС' },
-        description: { type: 'string', label: 'Описание' },
-        created_by: { type: 'number', label: 'Создал' }
-      },
-      storage: {
-        product_id: { type: 'number', label: 'ID товара' },
-        quantity: { type: 'number', label: 'Количество' },
-        last_receipt_document_id: { type: 'number', label: 'ID последнего документа' }
-      }
-    };
-
-    setTableStructure(structures[tableName] || {});
+const detectTableStructureByTable = (tableName) => {
+  const structures = {
+    users: {
+      Login: { type: 'string', label: 'Логин', required: true },
+      Full_name: { type: 'string', label: 'ФИО', required: true },
+      Role: { type: 'select', label: 'Роль', options: availableRoles, required: true }
+    },
+    vendors: {
+      Company_name: { type: 'string', label: 'Название компании', required: true },
+      Contact_person: { type: 'string', label: 'Контактное лицо', required: false },
+      Phone: { type: 'string', label: 'Телефон', required: false },
+      Email: { type: 'string', label: 'Email', required: false },
+      Address: { type: 'string', label: 'Адрес', required: false },
+      Inn: { type: 'string', label: 'ИНН', required: false },
+      Kpp: { type: 'string', label: 'КПП', required: false },
+      Payment_account: { type: 'string', label: 'Расчетный счет', required: false },
+      Bank_name: { type: 'string', label: 'Банк', required: false }
+    },
+    products: {
+      Article: { type: 'string', label: 'Артикул', required: true },
+      Name: { type: 'string', label: 'Название', required: true },
+      Description: { type: 'string', label: 'Описание', required: false },
+      Unit: { type: 'string', label: 'Ед. измерения', required: true },
+      Category: { type: 'string', label: 'Категория', required: false },
+      Min_stock: { type: 'number', label: 'Мин. остаток', required: false }
+    },
+    'vendor-products': {
+      Vendor_id: { type: 'number', label: 'ID поставщика', required: true },
+      Product_id: { type: 'number', label: 'ID товара', required: true },
+      Vendor_price: { type: 'number', label: 'Цена', required: false },
+      Currency: { type: 'string', label: 'Валюта', required: false },
+      Delivery_days: { type: 'number', label: 'Срок доставки', required: false }
+    },
+    documents: {
+      Doc_number: { type: 'string', label: 'Номер документа', required: true },
+      Doc_type: { type: 'string', label: 'Тип', required: true },
+      Doc_date: { type: 'string', label: 'Дата', required: true },
+      Vendor_id: { type: 'number', label: 'ID поставщика', required: false },
+      User_id: { type: 'number', label: 'ID пользователя', required: false },
+      Status: { type: 'string', label: 'Статус', required: false },
+      Total_amount: { type: 'number', label: 'Сумма', required: false },
+      Currency: { type: 'string', label: 'Валюта', required: false },
+      Description: { type: 'string', label: 'Описание', required: false }
+    },
+    'document-items': {
+      document_id: { type: 'number', label: 'ID документа', required: true },
+      product_id: { type: 'number', label: 'ID товара', required: true },
+      quantity: { type: 'number', label: 'Количество', required: true },
+      price: { type: 'number', label: 'Цена', required: true },
+      vat_rate: { type: 'number', label: 'НДС', required: false }
+    },
+    accounting: {
+      Operation_date: { type: 'string', label: 'Дата операции', required: true },
+      Operation_type: { type: 'string', label: 'Тип операции', required: true },
+      Document_id: { type: 'number', label: 'ID документа', required: true },
+      Supplier_id: { type: 'number', label: 'ID поставщика', required: false },
+      Amount: { type: 'number', label: 'Сумма', required: true },
+      Vat_amount: { type: 'number', label: 'Сумма НДС', required: false },
+      Description: { type: 'string', label: 'Описание', required: false },
+      Created_by: { type: 'number', label: 'Создал', required: false }
+    },
+    storage: {
+      Product_id: { type: 'number', label: 'ID товара', required: true },
+      Quantity: { type: 'number', label: 'Количество', required: true },
+      Last_receipt_document_id: { type: 'number', label: 'ID последнего документа', required: false }
+    }
   };
+
+  setTableStructure(structures[tableName] || {});
+};
 
   const getFieldLabel = (key) => {
     const labels = {
@@ -234,6 +317,10 @@ function Admin({ setError }) {
     return labels[key] || key;
   };
 
+  // ============================================================================
+  // ОБРАБОТЧИКИ ДЕЙСТВИЙ
+  // ============================================================================
+
   const handleEdit = (item) => {
     setSelectedItem(item);
     setFormData({ ...item });
@@ -278,6 +365,45 @@ function Admin({ setError }) {
   };
 
   const handleCreateSubmit = async () => {
+    // Валидация пароля для пользователей
+    if (activeTable === 'users') {
+      if (!createFormData.password || createFormData.password.length < 6) {
+        setError('Пароль должен содержать минимум 6 символов');
+        return;
+      }
+      if (createFormData.password !== createFormData.confirmPassword) {
+        setError('Пароли не совпадают');
+        return;
+      }
+      // Удаляем confirmPassword перед отправкой
+      const dataToSend = { ...createFormData };
+      delete dataToSend.confirmPassword;
+      
+      const token = localStorage.getItem('token');
+      const currentTable = tables.find(t => t.key === activeTable);
+      
+      try {
+        const response = await fetch(`http://localhost:8080${currentTable.endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(dataToSend)
+        });
+
+        if (!response.ok) throw new Error('Ошибка создания');
+
+        setShowCreateModal(false);
+        setRefresh(!refresh);
+        setError('');
+      } catch (err) {
+        setError('Ошибка создания: ' + err.message);
+      }
+      return;
+    }
+
+    // Для остальных таблиц
     const token = localStorage.getItem('token');
     const currentTable = tables.find(t => t.key === activeTable);
     
@@ -322,77 +448,43 @@ function Admin({ setError }) {
     }
   };
 
-  // Функция для рендеринга поля ввода в зависимости от типа
-  const renderFormField = (field, value, onChange, isCreate = false) => {
-    const fieldConfig = tableStructure[field];
+  const handlePasswordChange = async () => {
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setError('Пароли не совпадают');
+      return;
+    }
     
-    if (fieldConfig.type === 'select') {
-      const options = fieldConfig.options || availableRoles;
-      return (
-        <Form.Select
-          value={value || options[0]}
-          onChange={(e) => onChange({...formData, [field]: e.target.value})}
-        >
-          {options.map(option => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </Form.Select>
-      );
-    } else if (fieldConfig.type === 'number') {
-      return (
-        <Form.Control
-          type="number"
-          step="0.01"
-          value={value || 0}
-          onChange={(e) => onChange({...formData, [field]: parseFloat(e.target.value)})}
-        />
-      );
-    } else {
-      return (
-        <Form.Control
-          type={field === 'password' ? 'password' : 'text'}
-          value={value || ''}
-          onChange={(e) => onChange({...formData, [field]: e.target.value})}
-        />
-      );
+    if (passwordData.newPassword.length < 6) {
+      setError('Пароль должен содержать минимум 6 символов');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    
+    try {
+      const response = await fetch(`http://localhost:8080/api/admin/users/${selectedItem.id || selectedItem.ID}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ password: passwordData.newPassword })
+      });
+
+      if (!response.ok) throw new Error('Ошибка изменения пароля');
+
+      setShowPasswordModal(false);
+      setPasswordData({ newPassword: '', confirmPassword: '' });
+      setError('');
+      alert('Пароль успешно изменен');
+    } catch (err) {
+      setError('Ошибка изменения пароля: ' + err.message);
     }
   };
 
-  // Функция для рендеринга поля в форме создания
-  const renderCreateFormField = (field, value, onChange) => {
-    const fieldConfig = tableStructure[field];
-    
-    if (fieldConfig.type === 'select') {
-      const options = fieldConfig.options || availableRoles;
-      return (
-        <Form.Select
-          value={value || options[0]}
-          onChange={(e) => onChange({...createFormData, [field]: e.target.value})}
-        >
-          {options.map(option => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </Form.Select>
-      );
-    } else if (fieldConfig.type === 'number') {
-      return (
-        <Form.Control
-          type="number"
-          step="0.01"
-          value={value || 0}
-          onChange={(e) => onChange({...createFormData, [field]: parseFloat(e.target.value)})}
-        />
-      );
-    } else {
-      return (
-        <Form.Control
-          type={field === 'password' ? 'password' : 'text'}
-          value={value || ''}
-          onChange={(e) => onChange({...createFormData, [field]: e.target.value})}
-        />
-      );
-    }
-  };
+  // ============================================================================
+  // РЕНДЕРИНГ КОМПОНЕНТОВ
+  // ============================================================================
 
   const renderTableRow = (item, index) => {
     const fields = Object.keys(tableStructure);
@@ -433,46 +525,83 @@ function Admin({ setError }) {
   };
 
   const renderEditModal = () => {
-    const fields = Object.keys(tableStructure);
+    const groups = FIELD_GROUPS[activeTable] || [{ title: 'Информация', fields: Object.keys(tableStructure) }];
+    
     return (
       <Modal show={showEditModal} onHide={() => setShowEditModal(false)} size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Редактирование записи #{selectedItem?.id || selectedItem?.ID}</Modal.Title>
+          <Modal.Title>
+            Редактирование записи #{selectedItem?.id || selectedItem?.ID}
+          </Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form>
-            <Row>
-              {fields.map(field => (
-                <Col md={6} key={field}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>{tableStructure[field].label}</Form.Label>
-                    {tableStructure[field].type === 'select' ? (
-                      <Form.Select
-                        value={formData[field] || (tableStructure[field].options ? tableStructure[field].options[0] : '')}
-                        onChange={(e) => setFormData({...formData, [field]: e.target.value})}
-                      >
-                        {(tableStructure[field].options || availableRoles).map(option => (
-                          <option key={option} value={option}>{option}</option>
-                        ))}
-                      </Form.Select>
-                    ) : tableStructure[field].type === 'number' ? (
-                      <Form.Control
-                        type="number"
-                        step="0.01"
-                        value={formData[field] || 0}
-                        onChange={(e) => setFormData({...formData, [field]: parseFloat(e.target.value)})}
-                      />
-                    ) : (
-                      <Form.Control
-                        type={field === 'password' ? 'password' : 'text'}
-                        value={formData[field] || ''}
-                        onChange={(e) => setFormData({...formData, [field]: e.target.value})}
-                      />
-                    )}
-                  </Form.Group>
-                </Col>
-              ))}
-            </Row>
+            {groups.map((group, groupIndex) => (
+              <div key={groupIndex}>
+                {groups.length > 1 && (
+                  <h6 className="text-primary mb-3 mt-3 border-bottom pb-2">
+                    {group.title}
+                  </h6>
+                )}
+                <Row>
+                  {group.fields.map(field => {
+                    const fieldConfig = tableStructure[field];
+                    if (!fieldConfig) return null;
+                    
+                    return (
+                      <Col md={6} key={field}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>
+                            {fieldConfig.label}
+                            {fieldConfig.required && <span className="text-danger"> *</span>}
+                          </Form.Label>
+                          {fieldConfig.type === 'select' ? (
+                            <Form.Select
+                              value={formData[field] || (fieldConfig.options ? fieldConfig.options[0] : '')}
+                              onChange={(e) => setFormData({...formData, [field]: e.target.value})}
+                              required={fieldConfig.required}
+                            >
+                              {(fieldConfig.options || availableRoles).map(option => (
+                                <option key={option} value={option}>{option}</option>
+                              ))}
+                            </Form.Select>
+                          ) : fieldConfig.type === 'number' ? (
+                            <Form.Control
+                              type="number"
+                              step="0.01"
+                              value={formData[field] || 0}
+                              onChange={(e) => setFormData({...formData, [field]: parseFloat(e.target.value)})}
+                              required={fieldConfig.required}
+                            />
+                          ) : (
+                            <Form.Control
+                              type="text"
+                              value={formData[field] || ''}
+                              onChange={(e) => setFormData({...formData, [field]: e.target.value})}
+                              required={fieldConfig.required}
+                            />
+                          )}
+                        </Form.Group>
+                      </Col>
+                    );
+                  })}
+                </Row>
+              </div>
+            ))}
+            
+            {/* Кнопка для смены пароля (только для пользователей) */}
+            {activeTable === 'users' && (
+              <div className="mt-3">
+                <Button 
+                  variant="outline-warning" 
+                  onClick={() => {
+                    setShowPasswordModal(true);
+                  }}
+                >
+                  🔒 Изменить пароль
+                </Button>
+              </div>
+            )}
           </Form>
         </Modal.Body>
         <Modal.Footer>
@@ -488,7 +617,8 @@ function Admin({ setError }) {
   };
 
   const renderCreateModal = () => {
-    const fields = Object.keys(tableStructure);
+    const groups = FIELD_GROUPS[activeTable] || [{ title: 'Информация', fields: Object.keys(tableStructure) }];
+    
     return (
       <Modal show={showCreateModal} onHide={() => setShowCreateModal(false)} size="lg">
         <Modal.Header closeButton>
@@ -496,38 +626,93 @@ function Admin({ setError }) {
         </Modal.Header>
         <Modal.Body>
           <Form>
-            <Row>
-              {fields.map(field => (
-                <Col md={6} key={field}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>{tableStructure[field].label}</Form.Label>
-                    {tableStructure[field].type === 'select' ? (
-                      <Form.Select
-                        value={createFormData[field] || (tableStructure[field].options ? tableStructure[field].options[0] : '')}
-                        onChange={(e) => setCreateFormData({...createFormData, [field]: e.target.value})}
-                      >
-                        {(tableStructure[field].options || availableRoles).map(option => (
-                          <option key={option} value={option}>{option}</option>
-                        ))}
-                      </Form.Select>
-                    ) : tableStructure[field].type === 'number' ? (
+            {groups.map((group, groupIndex) => (
+              <div key={groupIndex}>
+                {groups.length > 1 && (
+                  <h6 className="text-primary mb-3 mt-3 border-bottom pb-2">
+                    {group.title}
+                  </h6>
+                )}
+                <Row>
+                  {group.fields.map(field => {
+                    const fieldConfig = tableStructure[field];
+                    if (!fieldConfig) return null;
+                    
+                    return (
+                      <Col md={6} key={field}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>
+                            {fieldConfig.label}
+                            {fieldConfig.required && <span className="text-danger"> *</span>}
+                          </Form.Label>
+                          {fieldConfig.type === 'select' ? (
+                            <Form.Select
+                              value={createFormData[field] || (fieldConfig.options ? fieldConfig.options[0] : '')}
+                              onChange={(e) => setCreateFormData({...createFormData, [field]: e.target.value})}
+                              required={fieldConfig.required}
+                            >
+                              {(fieldConfig.options || availableRoles).map(option => (
+                                <option key={option} value={option}>{option}</option>
+                              ))}
+                            </Form.Select>
+                          ) : fieldConfig.type === 'number' ? (
+                            <Form.Control
+                              type="number"
+                              step="0.01"
+                              value={createFormData[field] || 0}
+                              onChange={(e) => setCreateFormData({...createFormData, [field]: parseFloat(e.target.value)})}
+                              required={fieldConfig.required}
+                            />
+                          ) : (
+                            <Form.Control
+                              type="text"
+                              value={createFormData[field] || ''}
+                              onChange={(e) => setCreateFormData({...createFormData, [field]: e.target.value})}
+                              required={fieldConfig.required}
+                            />
+                          )}
+                        </Form.Group>
+                      </Col>
+                    );
+                  })}
+                </Row>
+              </div>
+            ))}
+            
+            {/* Специальная обработка для пользователей - добавляем поле пароля */}
+            {activeTable === 'users' && (
+              <div>
+                <h6 className="text-primary mb-3 mt-3 border-bottom pb-2">
+                  Безопасность
+                </h6>
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Пароль <span className="text-danger">*</span></Form.Label>
                       <Form.Control
-                        type="number"
-                        step="0.01"
-                        value={createFormData[field] || 0}
-                        onChange={(e) => setCreateFormData({...createFormData, [field]: parseFloat(e.target.value)})}
+                        type="password"
+                        value={createFormData.password || ''}
+                        onChange={(e) => setCreateFormData({...createFormData, password: e.target.value})}
+                        placeholder="Минимум 6 символов"
+                        required
                       />
-                    ) : (
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Подтверждение пароля <span className="text-danger">*</span></Form.Label>
                       <Form.Control
-                        type={field === 'password' ? 'password' : 'text'}
-                        value={createFormData[field] || ''}
-                        onChange={(e) => setCreateFormData({...createFormData, [field]: e.target.value})}
+                        type="password"
+                        value={createFormData.confirmPassword || ''}
+                        onChange={(e) => setCreateFormData({...createFormData, confirmPassword: e.target.value})}
+                        placeholder="Повторите пароль"
+                        required
                       />
-                    )}
-                  </Form.Group>
-                </Col>
-              ))}
-            </Row>
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </div>
+            )}
           </Form>
         </Modal.Body>
         <Modal.Footer>
@@ -541,6 +726,52 @@ function Admin({ setError }) {
       </Modal>
     );
   };
+
+  const renderPasswordModal = () => {
+    return (
+      <Modal show={showPasswordModal} onHide={() => setShowPasswordModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Изменить пароль пользователя</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Form.Group className="mb-3">
+              <Form.Label>Новый пароль <span className="text-danger">*</span></Form.Label>
+              <Form.Control
+                type="password"
+                value={passwordData.newPassword}
+                onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
+                placeholder="Минимум 6 символов"
+                required
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Подтвердите пароль <span className="text-danger">*</span></Form.Label>
+              <Form.Control
+                type="password"
+                value={passwordData.confirmPassword}
+                onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
+                placeholder="Повторите пароль"
+                required
+              />
+            </Form.Group>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowPasswordModal(false)}>
+            Отмена
+          </Button>
+          <Button variant="primary" onClick={handlePasswordChange}>
+            Изменить пароль
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    );
+  };
+
+  // ============================================================================
+  // ОСНОВНОЙ РЕНДЕР
+  // ============================================================================
 
   if (loading) {
     return (
@@ -621,6 +852,7 @@ function Admin({ setError }) {
 
       {renderEditModal()}
       {renderCreateModal()}
+      {renderPasswordModal()}
     </div>
   );
 }

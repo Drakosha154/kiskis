@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -180,9 +181,10 @@ func BulkUpdateStorage(c *gin.Context) {
 			Quantity   float64 `json:"quantity"`
 			Price      float64 `json:"price"`
 		} `json:"items" binding:"required,min=1,dive"`
-		Document_id  int    `json:"document_id"`
-		DocumentType string `json:"document_type"`
-		VendorID     int    `json:"vendor_id"`
+		Document_id      int    `json:"document_id"`
+		DocumentType     string `json:"document_type"`
+		VendorID         int    `json:"vendor_id"`
+		SelectedContract int    `json:"selected_contract_id"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -190,32 +192,60 @@ func BulkUpdateStorage(c *gin.Context) {
 		return
 	}
 
+	fmt.Println(input.SelectedContract)
+
 	// Начинаем транзакцию
 	tx := database.DB.Begin()
-	
-	// Считаем общую сумму закупки
-	var totalAmount float64
-	for _, item := range input.Items {
-		totalAmount += item.Quantity * item.Price
-	}
 
-	// Проверяем достаточно ли средств
-	var money models.Money
-	if err := tx.First(&money).Error; err != nil {
+	fmt.Println(input.SelectedContract)
+
+	// НОВАЯ ЛОГИКА: Получаем информацию о документе для проверки условий оплаты
+	var document models.Documents
+	if err := tx.First(&document, input.SelectedContract).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch money data"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Документ не найден"})
 		return
 	}
 
-	if money.Money < totalAmount {
-		tx.Rollback()
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":        "Insufficient funds",
-			"available":    money.Money,
-			"required":     totalAmount,
-			"shortage":     totalAmount - money.Money,
-		})
-		return
+	fmt.Println(document)
+
+	// ИСПРАВЛЕНО: Используем сумму из документа, а не пересчитываем из товаров
+	// Это гарантирует, что оплата будет соответствовать договору
+	totalAmount := document.Total_amount
+
+	// ИСПРАВЛЕНО: Рассчитываем сумму к оплате с учётом уже оплаченной суммы
+	// Для prepaid (100%) - amountToPay должно быть 0
+	// Для partial (50%) - amountToPay должно быть 50% от totalAmount
+	// Для postpaid (0%) - amountToPay должно быть 100% от totalAmount
+	amountToPay := totalAmount - document.PaidAmount
+
+	// Защита от отрицательных значений (если уже переплатили)
+	if amountToPay < 0 {
+		amountToPay = 0
+	}
+
+	// НОВАЯ ЛОГИКА: Проверяем достаточность средств только для оставшейся суммы
+	if amountToPay > 0 {
+		var money models.Money
+		if err := tx.First(&money).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось получить данные о бюджете"})
+			return
+		}
+
+		if money.Money < amountToPay {
+			tx.Rollback()
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":         "Недостаточно средств для оплаты остатка по договору",
+				"available":     money.Money,
+				"required":      amountToPay,
+				"shortage":      amountToPay - money.Money,
+				"already_paid":  document.PaidAmount,
+				"total_amount":  totalAmount,
+				"payment_terms": document.PaymentTerms,
+			})
+			return
+		}
 	}
 
 	results := make([]map[string]interface{}, 0)
@@ -231,7 +261,7 @@ func BulkUpdateStorage(c *gin.Context) {
 			storage.Last_receipt_date = time.Now()
 			storage.Last_receipt_document_id = input.Document_id
 			storage.Updated_at = time.Now()
-			
+
 			if err := tx.Save(&storage).Error; err != nil {
 				tx.Rollback()
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update storage"})
@@ -253,22 +283,27 @@ func BulkUpdateStorage(c *gin.Context) {
 			}
 		}
 
-		// Создаем запись в accounting
-		accounting := models.Accounting{
-			Operation_date: time.Now(),
-			Operation_type: "expense",
-			Document_id:    input.Document_id,
-			Supplier_id:    input.VendorID,
-			Amount:         item.Quantity * item.Price,
-			Description:    input.DocumentType,
-			Created_by:     int(c.MustGet("userID").(uint)),
-			Created_at:     time.Now(),
-		}
-		
-		if err := tx.Create(&accounting).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create accounting record"})
-			return
+		// ИСПРАВЛЕНО: Создаем запись в accounting только если есть сумма к оплате
+		// Для 100% предоплаты эта запись не создается, так как оплата уже была
+		if amountToPay > 0 {
+			// Рассчитываем пропорциональную часть оплаты для этого товар
+
+			accounting := models.Accounting{
+				Operation_date: time.Now(),
+				Operation_type: "expense",
+				Document_id:    input.Document_id,
+				Supplier_id:    input.VendorID,
+				Amount:         amountToPay,
+				Description:    input.DocumentType,
+				Created_by:     int(c.MustGet("userID").(uint)),
+				Created_at:     time.Now(),
+			}
+
+			if err := tx.Create(&accounting).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create accounting record"})
+				return
+			}
 		}
 
 		results = append(results, map[string]interface{}{
@@ -280,10 +315,24 @@ func BulkUpdateStorage(c *gin.Context) {
 		})
 	}
 
-	// Обновляем таблицу money (вычитаем общую сумму)
-	if err := tx.Model(&models.Money{}).Where("1 = 1").Update("money", money.Money - totalAmount).Error; err != nil {
+	// ИЗМЕНЕНО: Обновляем таблицу money только если есть сумма к оплате
+	if amountToPay > 0 {
+		if err := tx.Exec("UPDATE money SET money = money - ?", amountToPay).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update money"})
+			return
+		}
+	}
+
+	// НОВАЯ ЛОГИКА: Обновляем paid_amount и payment_status в документе
+	newPaymentStatus := "fully_paid"
+
+	if err := tx.Model(&document).Updates(map[string]interface{}{
+		"paid_amount":    amountToPay,
+		"payment_status": newPaymentStatus,
+	}).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update money"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update document payment status"})
 		return
 	}
 
@@ -293,10 +342,19 @@ func BulkUpdateStorage(c *gin.Context) {
 		return
 	}
 
+	// Получаем обновлённый баланс
+	var finalMoney models.Money
+	database.DB.First(&finalMoney)
+
 	c.JSON(http.StatusOK, gin.H{
-		"message":      "Bulk storage update completed",
-		"results":      results,
-		"total_amount": totalAmount,
-		"money_left":   money.Money - totalAmount,
+		"message":        "Bulk storage update completed",
+		"results":        results,
+		"total_amount":   totalAmount,
+		"amount_paid":    amountToPay,
+		"already_paid":   document.PaidAmount,
+		"new_paid_total": amountToPay,
+		"money_left":     finalMoney.Money,
+		"payment_status": newPaymentStatus,
+		"payment_terms":  document.PaymentTerms,
 	})
 }

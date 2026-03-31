@@ -28,6 +28,13 @@ function MetricCard({ title, value, icon, colorClass, subtitle, onClick, loading
   );
 }
 
+  // Форматирование даты и времени
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'Н/Д';
+    const date = new Date(dateString);
+    return date.toLocaleString('ru-RU');
+  };
+
 /** Модальное окно для детальной информации */
 function DetailModal({ isOpen, onClose, title, data, loading }) {
   if (!isOpen) return null;
@@ -170,9 +177,9 @@ function PurchaseCostDetail({ documents }) {
   );
 }
 
-/** Компонент для отображения деталей претензий */
-function ClaimsDetail({ claims }) {
-  if (!claims || claims.length === 0) {
+/** Компонент для отображения деталей претензий из claim_reports */
+function ClaimsDetail({ claimsData }) {
+  if (!claimsData || !claimsData.claims || claimsData.claims.length === 0) {
     return (
       <div className="text-center text-muted py-4">
         <div className="fs-2 mb-2">⚖️</div>
@@ -181,35 +188,50 @@ function ClaimsDetail({ claims }) {
     );
   }
 
-  const totalAmount = claims.reduce((sum, c) => sum + c.total_amount, 0);
+  const { claims, summary } = claimsData;
+
+  // Функция для получения бейджей типов претензий
+  const getClaimTypeBadges = (claim) => {
+    const badges = [];
+    if (claim.marriage) badges.push(<span key="marriage" className="badge bg-danger me-1">Брак</span>);
+    if (claim.deadline) badges.push(<span key="deadline" className="badge bg-warning text-dark me-1">Просрочка</span>);
+    if (claim.quantity) badges.push(<span key="quantity" className="badge bg-info me-1">Недопоставка</span>);
+    return badges;
+  };
 
   return (
     <div>
       <div className="alert alert-danger mb-3">
-        <strong>Общая сумма претензий:</strong>{' '}
-        {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(totalAmount)}
+        <strong>Всего претензий:</strong> {summary.total}
+        <div className="mt-2 small">
+          <span className="me-3">🔴 Брак: {summary.marriage}</span>
+          <span className="me-3">⚠️ Просрочка: {summary.deadline}</span>
+          <span>ℹ️ Недопоставка: {summary.quantity}</span>
+        </div>
       </div>
-      <h6 className="mb-3">Список претензий ({claims.length})</h6>
+      <h6 className="mb-3">Список претензий ({claims.length} документов)</h6>
       <div className="table-responsive">
         <table className="table table-hover">
           <thead className="table-light">
             <tr>
-              <th>№ претензии</th>
+              <th>№ документа</th>
               <th>Поставщик</th>
-              <th>Дата</th>
+              <th>Дата документа</th>
               <th>Сумма</th>
-              <th>Описание</th>
+              <th>Типы претензий</th>
+              <th>Дата создания</th>
               <th>Статус</th>
             </tr>
           </thead>
           <tbody>
-            {claims.map((claim, idx) => (
-              <tr key={idx}>
+            {claims.map((claim) => (
+              <tr key={claim.id}>
                 <td>{claim.doc_number}</td>
                 <td>{claim.vendor_name}</td>
                 <td>{claim.doc_date}</td>
                 <td>{new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(claim.total_amount)}</td>
-                <td>{claim.description || '—'}</td>
+                <td>{getClaimTypeBadges(claim)}</td>
+                <td>{new Date(claim.created_at).toLocaleDateString('ru-RU')}</td>
                 <td><StatusBadge status={claim.status} /></td>
               </tr>
             ))}
@@ -259,9 +281,10 @@ function AccountsPayableDetail({ accounts }) {
                 <tr key={idx} className={isOverdue ? 'table-danger' : ''}>
                   <td>{acc.doc_number}</td>
                   <td>{acc.vendor_name}</td>
-                  <td>{acc.doc_date}</td>
-                  <td>{new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(acc.total_amount)}</td>
-                  <td>{acc.deadline_date || '—'}</td>
+                  <td>{formatDateTime(acc.doc_date)}</td>
+                  {console.log(acc)}
+                  <td>{new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(acc.total_amount-acc.paid_amount)}</td>
+                  <td>{formatDateTime(acc.deadline_date) || '—'}</td>
                   <td>
                     {isOverdue ? (
                       <span className="badge bg-danger">Просрочено</span>
@@ -554,6 +577,8 @@ function ReportsPage({ setError }) {
       
       if (!summaryRes.ok) throw new Error('Failed to fetch summary');
       const summaryData = await summaryRes.json();
+
+      console.log(summary)
       setSummary(summaryData.summary);
       
     } catch (err) {
@@ -659,7 +684,7 @@ function ReportsPage({ setError }) {
       case 'cost':
         return <PurchaseCostDetail documents={modalData?.documents || []} />;
       case 'claims':
-        return <ClaimsDetail claims={modalData?.claims || []} />;
+        return <ClaimsDetail claimsData={modalData} />;
       case 'accounts':
         return <AccountsPayableDetail accounts={modalData?.accounts || []} />;
       default:
@@ -748,46 +773,42 @@ function ReportsPage({ setError }) {
           {/* Вкладка 1: Сводная аналитика - 4 основные метрики */}
           {activeTab === 'summary' && (
             <div className="row g-4">
-              <div className="col-md-6 col-lg-3">
+              <div className="col-md-6">
                 <MetricCard
                   title="Объём закупленного сырья"
                   value={loading ? '...' : (summary?.purchased_quantity !== undefined ? `${summary.purchased_quantity.toFixed(2)} ед.` : '—')}
                   icon="📦"
                   colorClass="text-primary"
-                  subtitle={`за период: ${dateFrom} — ${dateTo}`}
                   onClick={() => openModal('purchased', 'Детали закупленного сырья')}
                   loading={loading}
                 />
               </div>
-              <div className="col-md-6 col-lg-3">
+              <div className="col-md-6">
                 <MetricCard
                   title="Стоимость закупленного сырья"
                   value={loading ? '...' : (summary?.total_spent !== undefined ? formatMoney(summary.total_spent) : '—')}
                   icon="💰"
                   colorClass="text-success"
-                  subtitle="общая сумма закупок"
                   onClick={() => openModal('cost', 'Детали стоимости закупок')}
                   loading={loading}
                 />
               </div>
-              <div className="col-md-6 col-lg-3">
+              <div className="col-md-6">
                 <MetricCard
                   title="Количество претензий"
                   value={loading ? '...' : (summary?.claims_count ?? '—')}
                   icon="⚠️"
                   colorClass="text-danger"
-                  subtitle="к поставщикам"
                   onClick={() => openModal('claims', 'Детали претензий')}
                   loading={loading}
                 />
               </div>
-              <div className="col-md-6 col-lg-3">
+              <div className="col-md-6">
                 <MetricCard
                   title="Уровень задолженности"
                   value={loading ? '...' : (summary?.accounts_payable !== undefined ? formatMoney(summary.accounts_payable) : '—')}
                   icon="🏦"
-                  colorClass="text-warning"
-                  subtitle="неоплаченные счета"
+                  colorClass="text-warning"  
                   onClick={() => openModal('accounts', 'Кредиторская задолженность')}
                   loading={loading}
                 />

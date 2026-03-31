@@ -433,12 +433,15 @@ function WarehousePage({ setError }) {
   
   try {
     setLoading(true);
+
+    console.log(selectedContract.ID)
     
     // 1. Создаём документ прихода
     const receiptDoc = {
       doc_number: `PR-${Date.now()}`,
       doc_type: 'Приход',
       vendor_id: selectedContract.Vendor_id,
+      selected_contract_id: selectedContract.ID,
       status: (discrepancies.length > 0 || claimData.marriage || claimData.deadline || claimData.quantity) ? 'Расхождение' : 'Завершён',
       total_amount: calculateTotalAmount(),
       description: `Приход товаров по договору ${selectedContract.Doc_number}\n${receiptNotes}`
@@ -462,6 +465,41 @@ function WarehousePage({ setError }) {
     setReceiptDocument(docResult);
     setReceiptDocumentId(docResult.id);
 
+    // ═══════════════════════════════════════════════════════════════
+    // 2. СОЗДАЁМ ТОВАРЫ ДОКУМЕНТА (document_items)
+    // ═══════════════════════════════════════════════════════════════
+    const itemsToCreate = receivedItems.filter(item => item.received_quantity > 0);
+    
+    if (itemsToCreate.length > 0) {
+      const documentItemsData = {
+        document_id: docResult.id,
+        items: itemsToCreate.map(item => ({
+          document_id: docResult.id,
+          product_id: item.product_id,
+          quantity: item.received_quantity,
+          price: item.vendor_price || 0,
+          vat_rate: 0
+        }))
+      };
+
+      const itemsResponse = await fetch('http://localhost:8080/api/document-products', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(documentItemsData)
+      });
+
+      if (!itemsResponse.ok) {
+        const errorText = await itemsResponse.text();
+        console.error('Document items creation error:', errorText);
+        throw new Error('Failed to create document items');
+      }
+      
+      console.log('Document items created successfully');
+    }
+
     // 2. Подготавливаем данные для массового обновления склада
     const itemsToUpdate = receivedItems.filter(item => item.received_quantity > 0);
     
@@ -474,7 +512,8 @@ function WarehousePage({ setError }) {
         })),
         document_id: docResult.id,
         document_type: 'Приход',
-        vendor_id: selectedContract.Vendor_id
+        vendor_id: selectedContract.Vendor_id,
+        selected_contract_id: selectedContract.ID,
       };
 
       const storageResponse = await fetch('http://localhost:8080/api/storage/bulk-update', {
@@ -487,9 +526,38 @@ function WarehousePage({ setError }) {
       });
 
       if (!storageResponse.ok) {
-        const errorText = await storageResponse.text();
-        console.error('Storage update error:', errorText);
-        throw new Error('Failed to update storage');
+        const errorData = await storageResponse.json();
+        // НОВОЕ: Обработка ошибки недостатка средств
+        if (errorData.error && errorData.error.includes('Недостаточно средств')) {
+          alert(
+            `❌ Недостаточно средств для оплаты остатка по договору!\n\n` +
+            `Доступно в бюджете: ${errorData.available?.toFixed(2) || 0}₽\n` +
+            `Требуется к оплате: ${errorData.required?.toFixed(2) || 0}₽\n` +
+            `Нехватка: ${errorData.shortage?.toFixed(2) || 0}₽\n\n` +
+            `Уже оплачено: ${errorData.already_paid?.toFixed(2) || 0}₽\n` +
+            `Общая сумма: ${errorData.total_amount?.toFixed(2) || 0}₽\n` +
+            `Условия оплаты: ${errorData.payment_terms || 'не указаны'}\n\n` +
+            `Пополните бюджет и попробуйте снова.`
+          );
+        } else {
+          alert(`Ошибка обновления склада: ${errorData.error || 'Неизвестная ошибка'}`);
+        }
+        throw new Error(errorData.error || 'Failed to update storage');
+      }
+      
+      // НОВОЕ: Показываем информацию об успешной оплате
+      const storageResult = await storageResponse.json();
+
+      console.log(storageResult)
+      if (storageResult.amount_paid > 0) {
+        alert(
+          `✅ Товар успешно принят!\n\n` +
+          `Оплачено при приёмке: ${storageResult.amount_paid?.toFixed(2) || 0}₽\n` +
+          `Было оплачено ранее: ${storageResult.already_paid?.toFixed(2) || 0}₽\n` +
+          `Общая сумма: ${storageResult.total_amount?.toFixed(2) || 0}₽\n` +
+          `Остаток в бюджете: ${storageResult.money_left?.toFixed(2) || 0}₽\n` +
+          `Статус оплаты: ${storageResult.payment_status === 'fully_paid' ? 'Полностью оплачен' : 'Частично оплачен'}`
+        );
       }
     }
 

@@ -6,12 +6,16 @@ import ContractsPage from '../components/ContractsPage';
 import WarehousePage from '../components/WarehousePage';
 import DocumentsPage from '../components/DocumentsPage';
 import ReportsPage from '../components/ReportsPage';
-import AccountingModal from '../components/AccountingModal';
+import AccountingPage from '../components/AccountingPage';
+import { hasAccessToTab, getAccessibleTabs } from '../utils/roleUtils';
 
 function MainPage() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
-  const [activePage, setActivePage] = useState('suppliers');
+  
+  // Получаем список доступных вкладок и устанавливаем первую как активную
+  const accessibleTabs = getAccessibleTabs();
+  const [activePage, setActivePage] = useState(accessibleTabs[0] || 'suppliers');
   
   // Функция для обновления баланса (будет передана в Navbar)
   const refreshBalance = () => {
@@ -37,13 +41,23 @@ function MainPage() {
       case 'documents':
         return <DocumentsPage setError={setError} />;
       case 'accounting':
-        return <AccountingModal setError={setError} />;
+        return <AccountingPage setError={setError} />;
       case 'reports':
         return <ReportsPage setError={setError} />;
       default:
         return <SuppliersPage setError={setError} />;
     }
   };
+
+  // Конфигурация кнопок навигации
+  const navigationButtons = [
+    { id: 'suppliers', label: 'Поставщики' },
+    { id: 'contracts', label: 'Закл. договоров' },
+    { id: 'warehouse', label: 'Склад' },
+    { id: 'documents', label: 'Документы' },
+    { id: 'accounting', label: 'Бухгалтерия' },
+    { id: 'reports', label: 'Отчеты' }
+  ];
 
   return (
     <div className='container text-bg-dark' style={{ width: '100%', height: '100%', minWidth: '100%', minHeight: '100%', position: 'absolute' }}>
@@ -57,54 +71,29 @@ function MainPage() {
       {/* Кнопки навигации */}
       <div className='container border border-3 border-black rounded-5 text-bg-secondary' style={{ minWidth: '1200px', minHeight: '100px', position: 'relative', marginTop: '50px'}}>
         <div className="d-flex justify-content-evenly m-3 align-self-stretch">
-          <button 
-            className={`btn btn-lg border border-2 border-black btn-info ${activePage === 'suppliers' ? 'btn-success' : 'btn-primary' }`} 
-            type="button" 
-            style={{width:'200px', height:'65px'}}
-            onClick={() => setActivePage('suppliers')}
-          >
-            Поставщики
-          </button>
-          <button 
-            className={`btn btn-lg border border-2 border-black btn-info ${activePage === 'contracts' ? 'btn-success' : 'btn-primary'}`} 
-            type="button" 
-            style={{width:'200px', height:'65px'}}
-            onClick={() => setActivePage('contracts')}
-          >
-            Закл. договоров
-          </button>
-          <button 
-            className={`btn btn-lg border border-2 border-black btn-info ${activePage === 'warehouse' ? 'btn-success' : 'btn-primary'}`} 
-            type="button" 
-            style={{width:'200px', height:'65px'}}
-            onClick={() => setActivePage('warehouse')}
-          >
-            Склад
-          </button>
-          <button 
-            className={`btn btn-lg border border-2 border-black btn-info ${activePage === 'documents' ? 'btn-success' : 'btn-primary'}`} 
-            type="button" 
-            style={{width:'200px', height:'65px'}}
-            onClick={() => setActivePage('documents')}
-          >
-            Документы
-          </button>
-          <button 
-            className={`btn btn-lg border border-2 border-black btn-info ${activePage === 'accounting' ? 'btn-success' : 'btn-primary'}`} 
-            type="button" 
-            style={{width:'200px', height:'65px'}}
-            onClick={() => setActivePage('accounting')}
-          >
-            Бухгалтерия
-          </button>
-          <button 
-            className={`btn btn-lg border border-2 border-black btn-info ${activePage === 'reports' ? 'btn-success' : 'btn-primary'}`} 
-            type="button" 
-            style={{width:'200px', height:'65px'}}
-            onClick={() => setActivePage('reports')}
-          >
-            Отчеты
-          </button>
+          {navigationButtons.map(button => {
+            const hasAccess = hasAccessToTab(button.id);
+            const isActive = activePage === button.id;
+            
+            return (
+              <button 
+                key={button.id}
+                className={`btn btn-lg border border-2 border-black ${
+                  !hasAccess 
+                    ? 'btn-secondary' 
+                    : isActive 
+                      ? 'btn-success' 
+                      : 'btn-primary'
+                }`}
+                type="button" 
+                style={{width:'200px', height:'65px'}}
+                onClick={() => hasAccess && setActivePage(button.id)}
+                disabled={!hasAccess}
+              >
+                {button.label}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

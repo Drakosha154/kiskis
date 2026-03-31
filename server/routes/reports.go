@@ -48,15 +48,15 @@ func GetReportsSummary(c *gin.Context) {
 	// 3. Количество претензий - ИСПРАВЛЕНО: преобразуем даты в timestamp
 	startDate := dateFrom + " 00:00:00"
 	endDate := dateTo + " 23:59:59"
-	database.DB.Table("claims").
+	database.DB.Table("claim_reports").
+		Select("COALESCE(SUM((CASE WHEN marriage THEN 1 ELSE 0 END) + (CASE WHEN deadline THEN 1 ELSE 0 END) + (CASE WHEN quantity THEN 1 ELSE 0 END)), 0)").
 		Where("created_at BETWEEN ? AND ?", startDate, endDate).
-		Count(&summary.ClaimsCount)
+		Scan(&summary.ClaimsCount)
 
-	// 4. Уровень задолженности
-	database.DB.Table("documents d").
-		Select("COALESCE(SUM(d.total_amount - COALESCE(a.paid_amount, 0)), 0)").
-		Joins("LEFT JOIN (SELECT document_id, SUM(amount) as paid_amount FROM accountings WHERE operation_type = 'Оплата' GROUP BY document_id) a ON d.id = a.document_id").
-		Where("d.doc_type = ? AND d.status NOT IN (?)", "Приход", []string{"Оплачен", "Завершён"}).
+	// 4. Уровень задолженности - ИЗМЕНЕНО: используем paid_amount
+	database.DB.Table("documents").
+		Select("COALESCE(SUM(total_amount - paid_amount), 0)").
+		Where("payment_status != ? AND doc_type = ?", "fully_paid", "Договор").
 		Scan(&summary.AccountsPayable)
 
 	c.JSON(http.StatusOK, gin.H{"summary": summary})
@@ -220,30 +220,36 @@ func GetReportsCalendarEvents(c *gin.Context) {
 
 // GetPurchasedProducts - детальная информация по товарам на складе
 func GetPurchasedProducts(c *gin.Context) {
+	dateFrom := c.Query("date_from")
+	dateTo := c.Query("date_to")
 
-	// Для детальной информации по складу даты не используем - показываем текущее состояние
+	if dateFrom == "" {
+		dateFrom = time.Now().AddDate(0, -1, 0).Format("2006-01-02")
+	}
+	if dateTo == "" {
+		dateTo = time.Now().Format("2006-01-02")
+	}
+
 	type StockProduct struct {
-		ProductID       int        `json:"product_id"`
-		ProductName     string     `json:"product_name"`
-		ProductArticle  string     `json:"product_article"`
-		Unit            string     `json:"unit"`
-		Quantity        float64    `json:"total_quantity"`
-		MinStock        int        `json:"min_stock"`
-		LastReceiptDate *time.Time `json:"last_receipt_date"`
+		ProductID      int     `json:"product_id"`
+		ProductName    string  `json:"product_name"`
+		ProductArticle string  `json:"product_article"`
+		Unit           string  `json:"unit"`
+		TotalQuantity  float64 `json:"total_quantity"`
+		TotalAmount    float64 `json:"total_amount"`
 	}
 
 	var products []StockProduct
 
 	database.DB.Table("storages s").
 		Select(`
-			s.product_id,
-			p.name as product_name,
-			p.article as product_article,
-			p.unit,
-			s.quantity as total_quantity,
-			p.min_stock,
-			s.last_receipt_date
-		`).
+        s.product_id,
+        p.name as product_name,
+        p.article as product_article,
+        p.unit,
+        s.quantity as total_quantity,
+        0 as total_amount
+    `).
 		Joins("LEFT JOIN products p ON s.product_id = p.id").
 		Where("s.quantity > 0").
 		Order("s.quantity DESC").
@@ -300,24 +306,27 @@ func GetPurchaseCostDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"documents": documents})
 }
 
-
 // GetAccountsPayableDetail - детальная информация по кредиторской задолженности
 func GetAccountsPayableDetail(c *gin.Context) {
 	type AccountDetail struct {
-		ID           uint       `json:"id"`
-		DocNumber    string     `json:"doc_number"`
-		DocDate      string     `json:"doc_date"`
-		VendorName   string     `json:"vendor_name"`
-		TotalAmount  float64    `json:"total_amount"`
-		PaidAmount   float64    `json:"paid_amount"`
-		Remaining    float64    `json:"remaining"`
-		DeadlineDate *time.Time `json:"deadline_date"`
-		Status       string     `json:"status"`
+		ID            uint       `json:"id"`
+		DocNumber     string     `json:"doc_number"`
+		DocDate       string     `json:"doc_date"`
+		VendorName    string     `json:"vendor_name"`
+		TotalAmount   float64    `json:"total_amount"`
+		PaidAmount    float64    `json:"paid_amount"`
+		Remaining     float64    `json:"remaining"`
+		DeadlineDate  *time.Time `json:"deadline_date"`
+		DeliveryDate  *time.Time `json:"delivery_date"`
+		Status        string     `json:"status"`
+		PaymentStatus string     `json:"payment_status"`
+		PaymentTerms  string     `json:"payment_terms"`
+		IsCritical    bool       `json:"is_critical"`
 	}
 
 	var accounts []AccountDetail
 
-	// Получаем документы прихода с остатком задолженности
+	// ИЗМЕНЕНО: Получаем документы с использованием paid_amount из таблицы documents
 	database.DB.Table("documents d").
 		Select(`
 			d.id,
@@ -325,16 +334,21 @@ func GetAccountsPayableDetail(c *gin.Context) {
 			d.doc_date,
 			v.company_name as vendor_name,
 			d.total_amount,
-			COALESCE(a.paid_amount, 0) as paid_amount,
-			(d.total_amount - COALESCE(a.paid_amount, 0)) as remaining,
+			d.paid_amount,
+			(d.total_amount - d.paid_amount) as remaining,
 			d.deadline_date,
-			d.status
+			d.delivery_date,
+			d.status,
+			d.payment_status,
+			d.payment_terms,
+			CASE 
+				WHEN d.delivery_date IS NOT NULL AND d.delivery_date < NOW() AND d.payment_status != 'fully_paid' THEN true
+				ELSE false
+			END as is_critical
 		`).
 		Joins("LEFT JOIN vendors v ON d.vendor_id = v.id").
-		Joins("LEFT JOIN (SELECT document_id, SUM(amount) as paid_amount FROM accountings WHERE operation_type = 'Оплата' GROUP BY document_id) a ON d.id = a.document_id").
-		Where("d.doc_type = ? AND d.status NOT IN (?)", "Приход", []string{"Оплачен", "Завершён"}).
-		Having("remaining > 0").
-		Order("d.deadline_date ASC NULLS LAST").
+		Where("d.payment_status != ? AND doc_type = ?", "fully_paid", "Договор").
+		Order("is_critical DESC, d.deadline_date ASC NULLS LAST").
 		Scan(&accounts)
 
 	c.JSON(http.StatusOK, gin.H{"accounts": accounts})
@@ -430,4 +444,87 @@ func GetReportsVendorStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"vendor_stats": stats})
+}
+
+// GetClaimsDetailFromReports - детальная информация о претензиях из claim_reports
+func GetClaimsDetailFromReports(c *gin.Context) {
+	dateFrom := c.Query("date_from")
+	dateTo := c.Query("date_to")
+
+	if dateFrom == "" {
+		dateFrom = time.Now().AddDate(0, -1, 0).Format("2006-01-02")
+	}
+	if dateTo == "" {
+		dateTo = time.Now().Format("2006-01-02")
+	}
+
+	type ClaimDetail struct {
+		ID          uint      `json:"id"`
+		DocumentID  int       `json:"document_id"`
+		DocNumber   string    `json:"doc_number"`
+		DocDate     string    `json:"doc_date"`
+		VendorName  string    `json:"vendor_name"`
+		TotalAmount float64   `json:"total_amount"`
+		Status      string    `json:"status"`
+		Marriage    bool      `json:"marriage"`
+		Deadline    bool      `json:"deadline"`
+		Quantity    bool      `json:"quantity"`
+		CreatedAt   time.Time `json:"created_at"`
+	}
+
+	var claims []ClaimDetail
+
+	startDate := dateFrom + " 00:00:00"
+	endDate := dateTo + " 23:59:59"
+
+	database.DB.Table("claim_reports cr").
+		Select(`
+			cr.id,
+			cr.document_id,
+			d.doc_number,
+			d.doc_date,
+			v.company_name as vendor_name,
+			d.total_amount,
+			d.status,
+			cr.marriage,
+			cr.deadline,
+			cr.quantity,
+			cr.created_at
+		`).
+		Joins("LEFT JOIN documents d ON cr.document_id = d.id").
+		Joins("LEFT JOIN vendors v ON d.vendor_id = v.id").
+		Where("cr.created_at BETWEEN ? AND ?", startDate, endDate).
+		Order("cr.created_at DESC").
+		Scan(&claims)
+
+	// Подсчитываем общее количество претензий и разбивку по типам
+	totalClaims := 0
+	marriageCount := 0
+	deadlineCount := 0
+	quantityCount := 0
+
+	for _, claim := range claims {
+		if claim.Marriage {
+			marriageCount++
+			totalClaims++
+		}
+		if claim.Deadline {
+			deadlineCount++
+			totalClaims++
+		}
+		if claim.Quantity {
+			quantityCount++
+			totalClaims++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"claims": claims,
+		"summary": gin.H{
+			"total":    totalClaims,
+			"marriage": marriageCount,
+			"deadline": deadlineCount,
+			"quantity": quantityCount,
+		},
+	})
 }

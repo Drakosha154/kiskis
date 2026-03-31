@@ -14,7 +14,7 @@ import (
 func NewDocument(c *gin.Context) {
 
 	userID := c.MustGet("userID").(uint) // Получаем ID пользователя из middleware
-	
+
 	var input struct {
 		Doc_number   string  `json:"doc_number" binding:"required"`
 		Doc_type     string  `json:"doc_type" binding:"required"`
@@ -23,10 +23,10 @@ func NewDocument(c *gin.Context) {
 		Status       string  `json:"status" binding:"required"`
 		Total_amount float64 `json:"total_amount" binding:"required"`
 		Description  string  `json:"description" binding:"required"`
-		// Опциональные поля, которые можно передать из фронтенда
-		DeliveryDate  *string `json:"delivery_date"`  // Может быть передан извне
-		DeadlineDate  *string `json:"deadline_date"`  // Может быть передан извне
-		DeliveryDays  *int    `json:"delivery_days"`  // Может быть передан извне
+		DeliveryDate *string `json:"delivery_date"`
+		DeadlineDate *string `json:"deadline_date"`
+		DeliveryDays *int    `json:"delivery_days"`
+		PaymentTerms string  `json:"payment_terms"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -37,7 +37,7 @@ func NewDocument(c *gin.Context) {
 	// Парсим дату документа
 	var docDate time.Time
 	var err error
-	
+
 	if input.Doc_date != "" {
 		docDate, err = time.Parse("2006-01-02", input.Doc_date)
 		if err != nil {
@@ -67,7 +67,7 @@ func NewDocument(c *gin.Context) {
 			deadlineDate = &parsedDate
 		}
 	}
-	
+
 	// Если дедлайн не задан, ставим 30 дней от даты документа
 	if deadlineDate == nil {
 		defaultDeadline := docDate.AddDate(0, 0, 30)
@@ -93,34 +93,117 @@ func NewDocument(c *gin.Context) {
 		deliveryDays = &defaultDays
 	}
 
-	document := models.Documents{
-		Doc_number:        input.Doc_number,
-		Doc_type:          input.Doc_type,
-		Doc_date:          docDate.Format("2006-01-02"),
-		Vendor_id:         input.Vendor_id,
-		User_id:           userID,
-		Status:            input.Status,
-		Total_amount:      input.Total_amount,
-		Description:       input.Description,
-		Created_at:        time.Now(),
-		DeliveryDate:      deliveryDate,
-		DeadlineDate:      deadlineDate,
-		DeliveryDays:      deliveryDays,
+	// Рассчитываем сумму предоплаты и статус оплаты
+	var prepaymentAmount float64 = 0
+	var paymentStatus string = "unpaid"
+
+	if input.PaymentTerms == "prepaid" {
+		prepaymentAmount = input.Total_amount
+		paymentStatus = "fully_paid"
+	} else if input.PaymentTerms == "partial" {
+		prepaymentAmount = input.Total_amount * 0.5
+		paymentStatus = "partially_paid"
 	}
 
+	// Если требуется предоплата, проверяем достаточность средств
+	if prepaymentAmount > 0 {
+		var money models.Money
+		if err := database.DB.First(&money).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось получить данные о бюджете"})
+			return
+		}
+
+		if money.Money < prepaymentAmount {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":     "Недостаточно средств в бюджете для предоплаты",
+				"available": money.Money,
+				"required":  prepaymentAmount,
+				"shortage":  prepaymentAmount - money.Money,
+			})
+			return
+		}
+	}
+
+	document := models.Documents{
+		Doc_number:    input.Doc_number,
+		Doc_type:      input.Doc_type,
+		Doc_date:      docDate.Format("2006-01-02"),
+		Vendor_id:     input.Vendor_id,
+		User_id:       userID,
+		Status:        input.Status,
+		Total_amount:  input.Total_amount,
+		Description:   input.Description,
+		Created_at:    time.Now(),
+		DeliveryDate:  deliveryDate,
+		DeadlineDate:  deadlineDate,
+		DeliveryDays:  deliveryDays,
+		PaymentTerms:  input.PaymentTerms,
+		PaidAmount:    prepaymentAmount,
+		PaymentStatus: paymentStatus,
+	}
+
+	// Начинаем транзакцию для атомарности операций
+	tx := database.DB.Begin()
+
 	// Сохраняем документ в БД
-	if err := database.DB.Create(&document).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create documents"})
+	if err := tx.Create(&document).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось создать документ"})
+		return
+	}
+
+	// Обработка предоплаты
+	if prepaymentAmount > 0 {
+		// Списываем средства из бюджета
+		if err := tx.Exec("UPDATE money SET money = money - ?", prepaymentAmount).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось списать средства из бюджета"})
+			return
+		}
+
+		// Создаём запись в бухгалтерии
+		var paymentDescription string
+		if input.PaymentTerms == "prepaid" {
+			paymentDescription = "Предоплата 100% по договору " + document.Doc_number
+		} else {
+			paymentDescription = "Предоплата 50% по договору " + document.Doc_number
+		}
+
+		accounting := models.Accounting{
+			Operation_date: time.Now(),
+			Operation_type: "expense",
+			Document_id:    int(document.ID),
+			Supplier_id:    input.Vendor_id,
+			Amount:         prepaymentAmount,
+			Vat_amount:     0,
+			Description:    paymentDescription,
+			Created_by:     int(userID),
+			Created_at:     time.Now(),
+		}
+
+		if err := tx.Create(&accounting).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось создать запись в бухгалтерии"})
+			return
+		}
+	}
+
+	// Фиксируем транзакцию
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось завершить транзакцию"})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":        "Documents registered successfully",
+		"message":        "Документ успешно создан",
 		"id":             document.ID,
 		"doc_number":     document.Doc_number,
 		"delivery_date":  document.DeliveryDate,
 		"deadline_date":  document.DeadlineDate,
 		"delivery_days":  document.DeliveryDays,
+		"payment_terms":  document.PaymentTerms,
+		"paid_amount":    prepaymentAmount,
+		"payment_status": document.PaymentStatus,
 	})
 }
 
@@ -189,18 +272,17 @@ func UpdDocumentByID(c *gin.Context) {
 	}
 
 	var input struct {
-		Doc_number   string  `json:"doc_number" binding:"required"`
-		Doc_type     string  `json:"doc_type" binding:"required"`
-		Doc_date     string  `json:"doc_date"`
-		Vendor_id    int     `json:"vendor_id" binding:"required"`
-		Status       string  `json:"status" binding:"required"`
-		Total_amount float64 `json:"total_amount" binding:"required"`
-		Description  string  `json:"description" binding:"required"`
-		// Поля для обновления сроков
-		DeliveryDate  *string `json:"delivery_date"`
-		DeadlineDate  *string `json:"deadline_date"`
-		DeliveryDays  *int    `json:"delivery_days"`
-		ActualDeliveryDate *string `json:"actual_delivery_date"` // Фактическая дата поставки
+		Doc_number         string  `json:"doc_number" binding:"required"`
+		Doc_type           string  `json:"doc_type" binding:"required"`
+		Doc_date           string  `json:"doc_date"`
+		Vendor_id          int     `json:"vendor_id" binding:"required"`
+		Status             string  `json:"status" binding:"required"`
+		Total_amount       float64 `json:"total_amount" binding:"required"`
+		Description        string  `json:"description" binding:"required"`
+		DeliveryDate       *string `json:"delivery_date"`
+		DeadlineDate       *string `json:"deadline_date"`
+		DeliveryDays       *int    `json:"delivery_days"`
+		ActualDeliveryDate *string `json:"actual_delivery_date"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -356,7 +438,7 @@ func UpdateOverdueDocuments(c *gin.Context) {
 	// Находим все документы с истекшим дедлайном, которые ещё не завершены
 	var overdueDocuments []models.Documents
 	database.DB.
-		Where("deadline_date IS NOT NULL AND deadline_date < ? AND status NOT IN (?)", 
+		Where("deadline_date IS NOT NULL AND deadline_date < ? AND status NOT IN (?)",
 			today, []string{"Завершён", "Оплачен", "Просрочен"}).
 		Find(&overdueDocuments)
 
@@ -376,9 +458,9 @@ func UpdateOverdueDocuments(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":                "Overdue documents updated",
-		"overdue_documents":      len(overdueDocuments),
-		"overdue_deliveries":     len(overdueDeliveries),
+		"message":            "Overdue documents updated",
+		"overdue_documents":  len(overdueDocuments),
+		"overdue_deliveries": len(overdueDeliveries),
 	})
 }
 
