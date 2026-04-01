@@ -87,13 +87,14 @@ func GetReportsCalendarEvents(c *gin.Context) {
 
 	// 1. Дедлайны по оплате (только неоплаченные документы прихода)
 	var unpaidDocuments []struct {
-		ID          uint      `json:"id"`
-		DocNumber   string    `json:"doc_number"`
-		CreatedAt   time.Time `json:"created_at"`
-		TotalAmount float64   `json:"total_amount"`
-		VendorName  string    `json:"vendor_name"`
-		PaidAmount  float64   `json:"paid_amount"`
-		Status      string    `json:"status"`
+		ID           uint       `json:"id"`
+		DocNumber    string     `json:"doc_number"`
+		CreatedAt    time.Time  `json:"created_at"`
+		TotalAmount  float64    `json:"total_amount"`
+		VendorName   string     `json:"vendor_name"`
+		PaidAmount   float64    `json:"paid_amount"`
+		Status       string     `json:"status"`
+		DeliveryDate *time.Time `json:"delivery_date"`
 	}
 
 	database.DB.Table("documents d").
@@ -104,18 +105,25 @@ func GetReportsCalendarEvents(c *gin.Context) {
 			d.total_amount, 
 			v.company_name as vendor_name,
 			d.status,
+			d.delivery_date,
 			COALESCE(a.paid_amount, 0) as paid_amount
 		`).
 		Joins("LEFT JOIN vendors v ON d.vendor_id = v.id").
 		Joins("LEFT JOIN (SELECT document_id, SUM(amount) as paid_amount FROM accountings WHERE operation_type = 'Оплата' GROUP BY document_id) a ON d.id = a.document_id").
 		Where("d.doc_type = ? AND d.status NOT IN (?) AND d.total_amount > COALESCE(a.paid_amount, 0)",
-			"Приход", []string{"Оплачен", "Завершён"}).
+			"Договор", []string{"Исполнен", "Частично исполнен"}).
 		Scan(&unpaidDocuments)
 
 	for _, d := range unpaidDocuments {
 		remainingAmount := d.TotalAmount - d.PaidAmount
+		var baseDate time.Time
+		if d.DeliveryDate != nil {
+			baseDate = *d.DeliveryDate
+		} else {
+			baseDate = d.CreatedAt
+		}
 		if remainingAmount > 0 {
-			paymentDate := d.CreatedAt.AddDate(0, 0, 30)
+			paymentDate := baseDate.AddDate(0, 0, 30)
 			events = append(events, CalendarEvent{
 				Date:        paymentDate.Format("2006-01-02"),
 				Title:       fmt.Sprintf("Срок оплаты %s", d.DocNumber),
@@ -141,7 +149,7 @@ func GetReportsCalendarEvents(c *gin.Context) {
 		Select("d.id, d.doc_number, d.deadline_date, d.total_amount, v.company_name as vendor_name, d.status").
 		Joins("LEFT JOIN vendors v ON d.vendor_id = v.id").
 		Where("d.deadline_date IS NOT NULL AND d.deadline_date BETWEEN ? AND ? AND d.doc_type IN (?) AND d.status NOT IN (?)",
-			dateFrom, dateTo, []string{"Договор", "Контракт"}, []string{"Оплачен", "Завершён", "Исполнен"}).
+			dateFrom, dateTo, []string{"Догово", "Контрак"}, []string{"Оплачен", "Завершён", "Исполнен"}).
 		Scan(&contractDeadlines)
 
 	for _, d := range contractDeadlines {
@@ -171,8 +179,10 @@ func GetReportsCalendarEvents(c *gin.Context) {
 		Select("d.id, d.doc_number, d.delivery_date, d.total_amount, v.company_name as vendor_name, d.status").
 		Joins("LEFT JOIN vendors v ON d.vendor_id = v.id").
 		Where("d.delivery_date IS NOT NULL AND d.delivery_date BETWEEN ? AND ? AND d.doc_type IN (?) AND d.status NOT IN (?)",
-			dateFrom, dateTo, []string{"Договор", "Контракт"}, []string{"Оплачен", "Завершён", "Исполнен", "Отменён"}).
+			dateFrom, dateTo, []string{"Договор", "Контракт"}, []string{"Оплачен", "Завершён", "Исполнен", "Частично исполнен", "Отменён"}).
 		Scan(&pendingDeliveries)
+
+	fmt.Println(pendingDeliveries)
 
 	for _, d := range pendingDeliveries {
 		if d.DeliveryDate != nil {

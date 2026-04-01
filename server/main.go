@@ -20,7 +20,7 @@ func main() {
 		Host:     "localhost",
 		Port:     5432,
 		User:     "postgres",
-		Password: "antivzlom",
+		Password: "123",
 		DBName:   "kiskis",
 	}
 

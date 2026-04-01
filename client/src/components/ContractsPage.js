@@ -296,6 +296,7 @@ const handleSubmit = async () => {
         total_amount: vendorGroup.total_amount,
         description: `Поставщик: ${vendorGroup.vendor_name}\n\nСостав поставки:\n${itemsDescription}\n\n---\nАдрес доставки: ${contractData.delivery_address}\nУсловия оплаты: ${getPaymentTermsText(contractData.payment_terms)}\nДата доставки: ${contractData.delivery_date}\n${contractData.description}`,
         payment_terms: contractData.payment_terms, // НОВОЕ: передаём условия оплаты
+        delivery_date: contractData.delivery_date,
       };
 
       // 1. Создаем документ

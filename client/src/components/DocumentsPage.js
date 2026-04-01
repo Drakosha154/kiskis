@@ -949,38 +949,6 @@ const generatePDF = async (document) => {
           <i className="bi bi-file-text me-2"></i>
           Договоры и документы
         </h2>
-        <div>
-          <button 
-            className="btn btn-outline-primary me-2"
-            onClick={fetchDocuments}
-            disabled={loading}
-          >
-            <i className="bi bi-arrow-repeat me-2"></i>
-            Обновить
-          </button>
-          <button 
-            className="btn btn-success"
-            onClick={async () => {
-              // Пример создания нового документа
-              const newDocument = {
-                Doc_number: `DOC-${Date.now()}`,
-                Doc_type: 'Договор поставки',
-                vendor_name: 'ООО "Поставщик"',
-                Total_amount: 150000,
-                Description: 'Поставка оборудования',
-                Status: 'Черновик',
-                items: [
-                  { name: 'Ноутбук', quantity: 5, unit: 'шт', price: 30000 },
-                  { name: 'Монитор', quantity: 5, unit: 'шт', price: 15000 }
-                ]
-              };
-              await createDocument(newDocument);
-            }}
-          >
-            <i className="bi bi-plus-circle me-2"></i>
-            Создать документ
-          </button>
-        </div>
       </div>
 
       {documents.length === 0 ? (

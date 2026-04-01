@@ -112,7 +112,6 @@ function PurchasedProductsDetail({ products }) {
               <th>Артикул</th>
               <th className="text-center">Количество</th>
               <th>Ед. изм.</th>
-              <th className="text-center">Сумма</th>
             </tr>
           </thead>
           <tbody>
@@ -122,7 +121,6 @@ function PurchasedProductsDetail({ products }) {
                 <td>{product.product_article || '—'}</td>
                 <td className="text-center" style={{ fontSize: '1.05rem' }}>{product.total_quantity.toFixed(2)}</td>
                 <td>{product.unit || 'шт'}</td>
-                <td className="text-center fw-bold" style={{ fontSize: '1.05rem' }}>{new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(product.total_amount)}</td>
               </tr>
             ))}
           </tbody>
@@ -461,11 +459,6 @@ function Calendar({ events, loading, onDateSelect, selectedDate, dateRange }) {
         </button>
       </div>
       {renderCalendar()}
-      {dateRange && (
-        <div className="mt-2 small text-muted text-center">
-          📅 Отображаются события за весь период: {dateRange.start} — {dateRange.end}
-        </div>
-      )}
     </div>
   );
 }
@@ -518,7 +511,7 @@ function EventDetails({ selectedDate, events, loading }) {
         <h6 className="mb-1 fw-bold">📅 {formatDate(selectedDate)}</h6>
         <div className="small text-muted">События на этот день</div>
       </div>
-      
+      {console.log(dayEvents)}
       {dayEvents.length > 0 ? (
         <div>
           {dayEvents.map((event, idx) => (
@@ -615,7 +608,6 @@ const changeMonth = (increment) => {
     if (!summaryRes.ok) throw new Error('Failed to fetch summary');
     const summaryData = await summaryRes.json();
 
-    console.log(summary)
     setSummary(summaryData.summary);
     
   } catch (err) {
@@ -637,6 +629,8 @@ const changeMonth = (increment) => {
       
       if (!eventsRes.ok) throw new Error('Failed to fetch calendar events');
       const eventsData = await eventsRes.json();
+
+      console.log(eventsData)
       setCalendarEvents(eventsData.events || []);
     } catch (err) {
       console.error('Error fetching calendar events:', err);
