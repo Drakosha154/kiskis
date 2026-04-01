@@ -104,10 +104,10 @@ export default function AccountingModal({ show, onHide, setError }) {
         }}
       >
         {/* Баланс */}
-        <div className="bg-white p-3 rounded-3 mb-4 shadow-sm border">
-          <div className="d-flex justify-content-between align-items-center">
-            <span className="fs-5 text-secondary">Текущий баланс:</span>
-            <span className={`fs-3 fw-bold ${balance >= 0 ? 'text-success' : 'text-danger'}`}>
+        <div className="bg-white p-4 rounded-3 mb-4 shadow-sm border">
+          <div className="d-flex flex-column align-items-center justify-content-center text-center">
+            <span className="fs-4 text-secondary mb-2">Текущий баланс:</span>
+            <span className={`fs-1 fw-bold ${balance >= 0 ? 'text-success' : 'text-danger'}`}>
               {formatMoney(balance)}
             </span>
           </div>
@@ -182,7 +182,7 @@ export default function AccountingModal({ show, onHide, setError }) {
                         <td className="py-3">
                           {op.vendor_name || op.Product_name || '—'}
                         </td>
-                        <td className={`py-3 fw-bold ${op.Operation_type === 'income' ? 'text-success' : 'text-danger'}`}>
+                        <td className={`py-3 fw-bold text-center ${op.Operation_type === 'income' ? 'text-success' : 'text-danger'}`} style={{ fontSize: '1.1rem' }}>
                           {op.Operation_type === 'income' ? '+' : '-'}{formatMoney(op.Amount)}
                         </td>
                       </tr>

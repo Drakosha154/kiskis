@@ -14,10 +14,10 @@ function MetricCard({ title, value, icon, colorClass, subtitle, onClick, loading
     >
       <div className="card-body">
         <div className="d-flex align-items-center justify-content-between mb-2">
-          <span className="text-muted small fw-semibold text-uppercase">{title}</span>
+          <span className="fs-5 text-muted small fw-semibold text-uppercase">{title}</span>
           <span className={`fs-4 ${colorClass}`}>{icon}</span>
         </div>
-        <div className={`fs-2 fw-bold ${colorClass}`}>
+        <div className={`fs-1 fw-bold ${colorClass} mt-5`}>
           {loading ? (
             <div className="skeleton-line" style={{ width: '80px', height: '32px', background: '#e0e0e0', borderRadius: '4px' }} />
           ) : value}
@@ -96,9 +96,12 @@ function PurchasedProductsDetail({ products }) {
 
   return (
     <div>
-      <div className="alert alert-info mb-3">
-        <strong>Итого:</strong> {totalQuantity.toFixed(2)} ед. на сумму{' '}
-        {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(totalAmount)}
+      <div className="alert alert-info mb-3 text-center">
+        <div className="mb-2"><strong>Итого:</strong></div>
+        <div className="fs-4 fw-bold">{totalQuantity.toFixed(2)} ед.</div>
+        <div className="fs-3 fw-bold text-primary mt-2">
+          {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(totalAmount)}
+        </div>
       </div>
       <h6 className="mb-3">Список закупленного сырья ({products.length})</h6>
       <div className="table-responsive">
@@ -107,9 +110,9 @@ function PurchasedProductsDetail({ products }) {
             <tr>
               <th>Наименование</th>
               <th>Артикул</th>
-              <th>Количество</th>
+              <th className="text-center">Количество</th>
               <th>Ед. изм.</th>
-              <th>Сумма</th>
+              <th className="text-center">Сумма</th>
             </tr>
           </thead>
           <tbody>
@@ -117,9 +120,9 @@ function PurchasedProductsDetail({ products }) {
               <tr key={idx}>
                 <td>{product.product_name}</td>
                 <td>{product.product_article || '—'}</td>
-                <td>{product.total_quantity.toFixed(2)}</td>
+                <td className="text-center" style={{ fontSize: '1.05rem' }}>{product.total_quantity.toFixed(2)}</td>
                 <td>{product.unit || 'шт'}</td>
-                <td>{new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(product.total_amount)}</td>
+                <td className="text-center fw-bold" style={{ fontSize: '1.05rem' }}>{new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(product.total_amount)}</td>
               </tr>
             ))}
           </tbody>
@@ -144,9 +147,11 @@ function PurchaseCostDetail({ documents }) {
 
   return (
     <div>
-      <div className="alert alert-success mb-3">
-        <strong>Общая стоимость закупок:</strong>{' '}
-        {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(total)}
+      <div className="alert alert-success mb-3 text-center">
+        <div className="mb-2"><strong>Общая стоимость закупок:</strong></div>
+        <div className="fs-2 fw-bold text-success">
+          {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(total)}
+        </div>
       </div>
       <h6 className="mb-3">Список документов закупок ({documents.length})</h6>
       <div className="table-responsive">
@@ -156,7 +161,7 @@ function PurchaseCostDetail({ documents }) {
               <th>№ документа</th>
               <th>Поставщик</th>
               <th>Дата</th>
-              <th>Сумма</th>
+              <th className="text-center">Сумма</th>
               <th>Статус</th>
             </tr>
           </thead>
@@ -166,7 +171,7 @@ function PurchaseCostDetail({ documents }) {
                 <td>{doc.doc_number}</td>
                 <td>{doc.vendor_name}</td>
                 <td>{doc.doc_date}</td>
-                <td>{new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(doc.total_amount)}</td>
+                <td className="text-center fw-bold" style={{ fontSize: '1.05rem' }}>{new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(doc.total_amount)}</td>
                 <td><StatusBadge status={doc.status} /></td>
               </tr>
             ))}
@@ -201,12 +206,13 @@ function ClaimsDetail({ claimsData }) {
 
   return (
     <div>
-      <div className="alert alert-danger mb-3">
-        <strong>Всего претензий:</strong> {summary.total}
-        <div className="mt-2 small">
-          <span className="me-3">🔴 Брак: {summary.marriage}</span>
-          <span className="me-3">⚠️ Просрочка: {summary.deadline}</span>
-          <span>ℹ️ Недопоставка: {summary.quantity}</span>
+      <div className="alert alert-danger mb-3 text-center">
+        <div className="mb-2"><strong>Всего претензий:</strong></div>
+        <div className="fs-2 fw-bold text-danger mb-3"  style={{marginTop: '50px'}}>{summary.total}</div>
+        <div className="mt-2">
+          <span className="me-3 fs-5">🔴 Брак: <strong>{summary.marriage}</strong></span>
+          <span className="me-3 fs-5">⚠️ Просрочка: <strong>{summary.deadline}</strong></span>
+          <span className="fs-5">ℹ️ Недопоставка: <strong>{summary.quantity}</strong></span>
         </div>
       </div>
       <h6 className="mb-3">Список претензий ({claims.length} документов)</h6>
@@ -217,7 +223,7 @@ function ClaimsDetail({ claimsData }) {
               <th>№ документа</th>
               <th>Поставщик</th>
               <th>Дата документа</th>
-              <th>Сумма</th>
+              <th className="text-center">Сумма</th>
               <th>Типы претензий</th>
               <th>Дата создания</th>
               <th>Статус</th>
@@ -229,7 +235,7 @@ function ClaimsDetail({ claimsData }) {
                 <td>{claim.doc_number}</td>
                 <td>{claim.vendor_name}</td>
                 <td>{claim.doc_date}</td>
-                <td>{new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(claim.total_amount)}</td>
+                <td className="text-center fw-bold" style={{ fontSize: '1.05rem' }}>{new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(claim.total_amount)}</td>
                 <td>{getClaimTypeBadges(claim)}</td>
                 <td>{new Date(claim.created_at).toLocaleDateString('ru-RU')}</td>
                 <td><StatusBadge status={claim.status} /></td>
@@ -257,9 +263,11 @@ function AccountsPayableDetail({ accounts }) {
 
   return (
     <div>
-      <div className="alert alert-warning mb-3">
-        <strong>Общая задолженность:</strong>{' '}
-        {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(total)}
+      <div className="alert alert-warning mb-3 text-center">
+        <div className="mb-2"><strong>Общая задолженность:</strong></div>
+        <div className="fs-2 fw-bold text-warning">
+          {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(total)}
+        </div>
       </div>
       <h6 className="mb-3">Список непогашенных документов ({accounts.length})</h6>
       <div className="table-responsive">
@@ -269,7 +277,7 @@ function AccountsPayableDetail({ accounts }) {
               <th>№ документа</th>
               <th>Поставщик</th>
               <th>Дата</th>
-              <th>Сумма</th>
+              <th className="text-center">Сумма</th>
               <th>Срок оплаты</th>
               <th>Статус</th>
             </tr>
@@ -283,7 +291,7 @@ function AccountsPayableDetail({ accounts }) {
                   <td>{acc.vendor_name}</td>
                   <td>{formatDateTime(acc.doc_date)}</td>
                   {console.log(acc)}
-                  <td>{new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(acc.total_amount-acc.paid_amount)}</td>
+                  <td className="text-center fw-bold" style={{ fontSize: '1.05rem' }}>{new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(acc.total_amount-acc.paid_amount)}</td>
                   <td>{formatDateTime(acc.deadline_date) || '—'}</td>
                   <td>
                     {isOverdue ? (
@@ -549,8 +557,7 @@ function ReportsPage({ setError }) {
   const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const nextYear = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  const [dateFrom, setDateFrom] = useState(monthAgo);
-  const [dateTo, setDateTo] = useState(today);
+  const [selectedMonth, setSelectedMonth] = useState(new Date()); // текущий месяц
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('summary');
@@ -565,29 +572,59 @@ function ReportsPage({ setError }) {
 
   const getToken = () => localStorage.getItem('token');
 
-  // Получение сводной статистики
-  const fetchReports = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = getToken();
-      const summaryRes = await fetch(
-        `http://localhost:8080/api/reports/summary?date_from=${dateFrom}&date_to=${dateTo}`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      
-      if (!summaryRes.ok) throw new Error('Failed to fetch summary');
-      const summaryData = await summaryRes.json();
+  // Вспомогательные функции для работы с месяцами
+const getMonthStart = (date) => {
+  const d = new Date(date);
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+};
 
-      console.log(summary)
-      setSummary(summaryData.summary);
-      
-    } catch (err) {
-      console.error('Error fetching reports:', err);
-      if (setError) setError('Ошибка загрузки данных отчётов');
-    } finally {
-      setLoading(false);
-    }
-  }, [dateFrom, dateTo, setError]);
+const getMonthEnd = (date) => {
+  const d = new Date(date);
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+};
+
+const formatMonthYear = (date) => {
+  const months = [
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+  ];
+  const d = new Date(date);
+  return `${months[d.getMonth()]} ${d.getFullYear()}`;
+};
+
+const changeMonth = (increment) => {
+  setSelectedMonth(prevMonth => {
+    const newDate = new Date(prevMonth);
+    newDate.setMonth(newDate.getMonth() + increment);
+    return newDate;
+  });
+};
+
+  const fetchReports = useCallback(async () => {
+  setLoading(true);
+  try {
+    const token = getToken();
+    const dateFrom = getMonthStart(selectedMonth);
+    const dateTo = getMonthEnd(selectedMonth);
+    
+    const summaryRes = await fetch(
+      `http://localhost:8080/api/reports/summary?date_from=${dateFrom}&date_to=${dateTo}`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    
+    if (!summaryRes.ok) throw new Error('Failed to fetch summary');
+    const summaryData = await summaryRes.json();
+
+    console.log(summary)
+    setSummary(summaryData.summary);
+    
+  } catch (err) {
+    console.error('Error fetching reports:', err);
+    if (setError) setError('Ошибка загрузки данных отчётов');
+  } finally {
+    setLoading(false);
+  }
+}, [selectedMonth, setError]);
 
   // Получение событий календаря за весь период
   const fetchCalendarEvents = useCallback(async () => {
@@ -608,50 +645,52 @@ function ReportsPage({ setError }) {
 
   // Получение детальных данных для модального окна
   const fetchModalDetails = async (type) => {
-    setModalLoading(true);
-    try {
-      const token = getToken();
-      let response;
-      
-      switch (type) {
-        case 'purchased':
-          response = await fetch(
-            `http://localhost:8080/api/reports/purchased-products?date_from=${dateFrom}&date_to=${dateTo}`,
-            { headers: { 'Authorization': `Bearer ${token}` } }
-          );
-          break;
-        case 'cost':
-          response = await fetch(
-            `http://localhost:8080/api/reports/purchase-cost?date_from=${dateFrom}&date_to=${dateTo}`,
-            { headers: { 'Authorization': `Bearer ${token}` } }
-          );
-          break;
-        case 'claims':
-          response = await fetch(
-            `http://localhost:8080/api/reports/claims-detail?date_from=${dateFrom}&date_to=${dateTo}`,
-            { headers: { 'Authorization': `Bearer ${token}` } }
-          );
-          break;
-        case 'accounts':
-          response = await fetch(
-            `http://localhost:8080/api/reports/accounts-payable-detail`,
-            { headers: { 'Authorization': `Bearer ${token}` } }
-          );
-          break;
-        default:
-          return;
-      }
-      
-      if (!response.ok) throw new Error('Failed to fetch details');
-      const data = await response.json();
-      setModalData(data);
-    } catch (err) {
-      console.error('Error fetching modal details:', err);
-      setModalData({ error: true, message: 'Ошибка загрузки данных' });
-    } finally {
-      setModalLoading(false);
+  setModalLoading(true);
+  try {
+    const token = getToken();
+    const dateFrom = getMonthStart(selectedMonth);
+    const dateTo = getMonthEnd(selectedMonth);
+    let response;
+    
+    switch (type) {
+      case 'purchased':
+        response = await fetch(
+          `http://localhost:8080/api/reports/purchased-products?date_from=${dateFrom}&date_to=${dateTo}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        break;
+      case 'cost':
+        response = await fetch(
+          `http://localhost:8080/api/reports/purchase-cost?date_from=${dateFrom}&date_to=${dateTo}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        break;
+      case 'claims':
+        response = await fetch(
+          `http://localhost:8080/api/reports/claims-detail?date_from=${dateFrom}&date_to=${dateTo}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        break;
+      case 'accounts':
+        response = await fetch(
+          `http://localhost:8080/api/reports/accounts-payable-detail`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        break;
+      default:
+        return;
     }
-  };
+    
+    if (!response.ok) throw new Error('Failed to fetch details');
+    const data = await response.json();
+    setModalData(data);
+  } catch (err) {
+    console.error('Error fetching modal details:', err);
+    setModalData({ error: true, message: 'Ошибка загрузки данных' });
+  } finally {
+    setModalLoading(false);
+  }
+};
 
   const openModal = (type, title) => {
     setModalTitle(title);
@@ -733,39 +772,30 @@ function ReportsPage({ setError }) {
         </div>
 
         {activeTab === 'summary' && (
-          <div className="d-flex align-items-center gap-2 flex-wrap">
-            <div className="input-group input-group-sm" style={{ width: 'auto' }}>
-              <span className="input-group-text bg-white">С</span>
-              <input
-                type="date"
-                className="form-control"
-                value={dateFrom}
-                max={dateTo}
-                onChange={(e) => setDateFrom(e.target.value)}
-              />
-            </div>
-            <div className="input-group input-group-sm" style={{ width: 'auto' }}>
-              <span className="input-group-text bg-white">По</span>
-              <input
-                type="date"
-                className="form-control"
-                value={dateTo}
-                min={dateFrom}
-                max={today}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
-            </div>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={fetchReports}
-              disabled={loading}
-            >
-              {loading ? (
-                <span className="spinner-border spinner-border-sm me-1" />
-              ) : '🔄'} Обновить
-            </button>
-          </div>
-        )}
+  <div className="d-flex align-items-center gap-2 flex-wrap">
+    <button
+      className="btn btn-outline-secondary btn-sm"
+      onClick={() => changeMonth(-1)}
+      disabled={loading}
+      title="Предыдущий месяц"
+    >
+      ← Предыдущий
+    </button>
+    
+    <div className="px-3 py-1 bg-light rounded border" style={{ minWidth: '150px', textAlign: 'center' }}>
+      <strong>{formatMonthYear(selectedMonth)}</strong>
+    </div>
+    
+    <button
+      className="btn btn-outline-secondary btn-sm"
+      onClick={() => changeMonth(1)}
+      disabled={loading}
+      title="Следующий месяц"
+    >
+      Следующий →
+    </button>
+  </div>
+)}
       </div>
 
       <div className="container-fluid rounded-3 text-bg-light mt-3 p-0 overflow-hidden">
@@ -783,7 +813,7 @@ function ReportsPage({ setError }) {
                   loading={loading}
                 />
               </div>
-              <div className="col-md-6">
+              <div className="col-md-6" style={{height: '250px'}}>
                 <MetricCard
                   title="Стоимость закупленного сырья"
                   value={loading ? '...' : (summary?.total_spent !== undefined ? formatMoney(summary.total_spent) : '—')}
@@ -803,7 +833,7 @@ function ReportsPage({ setError }) {
                   loading={loading}
                 />
               </div>
-              <div className="col-md-6">
+              <div className="col-md-6" style={{height: '250px'}}>
                 <MetricCard
                   title="Уровень задолженности"
                   value={loading ? '...' : (summary?.accounts_payable !== undefined ? formatMoney(summary.accounts_payable) : '—')}

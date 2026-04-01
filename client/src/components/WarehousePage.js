@@ -1082,7 +1082,7 @@ function WarehousePage({ setError }) {
                   <th>№ договора</th>
                   <th>Поставщик</th>
                   <th>Дата</th>
-                  <th>Сумма</th>
+                  <th className="text-center">Сумма</th>
                   <th>Статус</th>
                   <th>Действия</th>
                 </tr>
@@ -1093,7 +1093,7 @@ function WarehousePage({ setError }) {
                     <td><strong>{contract.Doc_number}</strong></td>
                     <td>{contract.vendor_name}</td>
                     <td>{new Date(contract.Created_at).toLocaleDateString()}</td>
-                    <td>{formatNumber(contract.Total_amount)} ₽</td>
+                    <td className="text-center fw-bold" style={{ fontSize: '1.05rem' }}>{formatNumber(contract.Total_amount)} ₽</td>
                     <td>
                       <Badge bg={contract.Status === 'Черновик' ? 'secondary' : 'success'}>
                         {contract.Status}
@@ -1159,19 +1159,19 @@ function WarehousePage({ setError }) {
                     <tbody>
                       {contractProducts.map((product, idx) => (
                         <tr key={product.id || idx}>
-                          <td>{idx + 1}</td>
-                          <td>{product.product_name}</td>
-                          <td>{product.product_article}</td>
-                          <td className="text-center">{formatNumber(product.vendor_price)}</td>
-                          <td className="text-center">{selectedContract.Doc_date}</td>
-                          <td className="text-center">{selectedContract.Currency}</td>
+                     <td>{idx + 1}</td>
+                     <td>{product.product_name}</td>
+                     <td>{product.product_article}</td>
+                     <td className="text-center fw-bold" style={{ fontSize: '1.05rem' }}>{formatNumber(product.vendor_price)}</td>
+                     <td className="text-center">{selectedContract.Doc_date}</td>
+                     <td className="text-center">{selectedContract.Currency}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr>
                         <td colSpan="3" className="text-end"><strong>Всего позиций:</strong></td>
-                        <td colSpan="3"><strong>{contractProducts.length}</strong></td>
+                        <td colSpan="3"><strong style={{ fontSize: '1.1rem' }}>{contractProducts.length}</strong></td>
                       </tr>
                     </tfoot>
                   </Table>
@@ -1266,15 +1266,15 @@ function WarehousePage({ setError }) {
               />
             </td>
             <td className="text-center">{item.unit}</td>
-            <td className="text-end">{formatNumber(item.vendor_price)} ₽</td>
-            <td className="text-end">{formatNumber(item.received_quantity * item.vendor_price)} ₽</td>
+            <td className="text-end" style={{ fontSize: '1.05rem' }}>{formatNumber(item.vendor_price)} ₽</td>
+            <td className="text-end fw-bold" style={{ fontSize: '1.05rem' }}>{formatNumber(item.received_quantity * item.vendor_price)} ₽</td>
           </tr>
         ))}
       </tbody>
       <tfoot>
         <tr>
           <td colSpan="6" className="text-end"><strong>Итого:</strong></td>
-          <td className="text-end"><strong>{formatNumber(calculateTotalAmount())} ₽</strong></td>
+          <td className="text-end"><strong style={{ fontSize: '1.2rem' }}>{formatNumber(calculateTotalAmount())} ₽</strong></td>
         </tr>
       </tfoot>
     </Table>
@@ -1323,7 +1323,7 @@ function WarehousePage({ setError }) {
               ))}
             </ul>
             <small className="text-muted mt-2 d-block">
-              Сумма недопоставки: {formatNumber(calculateShortageAmount())} ₽
+              Сумма недопоставки: <strong style={{ fontSize: '1.1rem' }}>{formatNumber(calculateShortageAmount())} ₽</strong>
             </small>
           </Alert>
         )}

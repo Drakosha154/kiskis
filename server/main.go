@@ -20,7 +20,7 @@ func main() {
 		Host:     "localhost",
 		Port:     5432,
 		User:     "postgres",
-		Password: "123",
+		Password: "antivzlom",
 		DBName:   "kiskis",
 	}
 
@@ -129,49 +129,49 @@ func main() {
 		{
 			// Текущий пользователь
 			adminGroup.GET("/me", routes.GetCurrentUser)
-			
+
 			// Пользователи
 			adminGroup.GET("/users", routes.AdminGetAllUsers)
 			adminGroup.POST("/users", routes.AdminCreateUser)
 			adminGroup.PATCH("/users/:id", routes.AdminUpdateUser)
 			adminGroup.DELETE("/users/:id", routes.AdminDeleteUser)
-			
+
 			// Поставщики
 			adminGroup.GET("/vendors", routes.AdminGetAllVendors)
 			adminGroup.POST("/vendors", routes.AdminCreateVendor)
 			adminGroup.PATCH("/vendors/:id", routes.AdminUpdateVendor)
 			adminGroup.DELETE("/vendors/:id", routes.AdminDeleteVendor)
-			
+
 			// Товары
 			adminGroup.GET("/products", routes.AdminGetAllProducts)
 			adminGroup.POST("/products", routes.AdminCreateProduct)
 			adminGroup.PATCH("/products/:id", routes.AdminUpdateProduct)
 			adminGroup.DELETE("/products/:id", routes.AdminDeleteProduct)
-			
+
 			// Товары поставщиков
 			adminGroup.GET("/vendor-products", routes.AdminGetAllVendorProducts)
 			adminGroup.POST("/vendor-products", routes.AdminCreateVendorProduct)
 			adminGroup.PATCH("/vendor-products/:id", routes.AdminUpdateVendorProduct)
 			adminGroup.DELETE("/vendor-products/:id", routes.AdminDeleteVendorProduct)
-			
+
 			// Документы
 			adminGroup.GET("/documents", routes.AdminGetAllDocuments)
 			adminGroup.POST("/documents", routes.AdminCreateDocument)
 			adminGroup.PATCH("/documents/:id", routes.AdminUpdateDocument)
 			adminGroup.DELETE("/documents/:id", routes.AdminDeleteDocument)
-			
+
 			// Позиции документов
 			adminGroup.GET("/document-items", routes.AdminGetAllDocumentItems)
 			adminGroup.POST("/document-items", routes.AdminCreateDocumentItem)
 			adminGroup.PATCH("/document-items/:id", routes.AdminUpdateDocumentItem)
 			adminGroup.DELETE("/document-items/:id", routes.AdminDeleteDocumentItem)
-			
+
 			// Бухгалтерия
 			adminGroup.GET("/accounting", routes.AdminGetAllAccounting)
 			adminGroup.POST("/accounting", routes.AdminCreateAccounting)
 			adminGroup.PATCH("/accounting/:id", routes.AdminUpdateAccounting)
 			adminGroup.DELETE("/accounting/:id", routes.AdminDeleteAccounting)
-			
+
 			// Склад
 			adminGroup.GET("/storage", routes.AdminGetAllStorage)
 			adminGroup.POST("/storage", routes.AdminCreateStorage)
