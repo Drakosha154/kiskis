@@ -32,10 +32,12 @@ func GetReportsSummary(c *gin.Context) {
 
 	var summary SummaryResponse
 
-	// 1. Объём закупленного сырья
-	database.DB.Table("storages s").
-		Select("COALESCE(SUM(s.quantity), 0)").
-		Where("s.quantity > 0").
+	// 1. Объём закупленного сырья - из документов прихода за период
+	database.DB.Table("document_items di").
+		Select("COALESCE(SUM(di.quantity), 0)").
+		Joins("LEFT JOIN documents d ON di.document_id = d.id").
+		Where("d.created_at BETWEEN ? AND ? AND d.doc_type = ?",
+			dateFrom, dateTo+" 23:59:59", "Приход").
 		Scan(&summary.PurchasedQuantity)
 
 	// 2. Стоимость закупленного сырья
@@ -251,18 +253,21 @@ func GetPurchasedProducts(c *gin.Context) {
 
 	var products []StockProduct
 
-	database.DB.Table("storages s").
+	database.DB.Table("document_items di").
 		Select(`
-        s.product_id,
+        di.product_id,
         p.name as product_name,
         p.article as product_article,
         p.unit,
-        s.quantity as total_quantity,
-        0 as total_amount
+        SUM(di.quantity) as total_quantity,
+        SUM(di.quantity * di.price) as total_amount
     `).
-		Joins("LEFT JOIN products p ON s.product_id = p.id").
-		Where("s.quantity > 0").
-		Order("s.quantity DESC").
+		Joins("LEFT JOIN products p ON di.product_id = p.id").
+		Joins("LEFT JOIN documents d ON di.document_id = d.id").
+		Where("d.created_at BETWEEN ? AND ? AND d.doc_type = ?",
+			dateFrom, dateTo+" 23:59:59", "Приход").
+		Group("di.product_id, p.name, p.article, p.unit").
+		Order("total_quantity DESC").
 		Scan(&products)
 
 	c.JSON(http.StatusOK, gin.H{"products": products})
