@@ -96,3 +96,85 @@ func GetAccountingSummary(c *gin.Context) {
 
 	c.JSON(http.StatusOK, summary)
 }
+
+func GetAccountingDebts(c *gin.Context) {
+	type DebtResponse struct {
+		ID           uint    `json:"id"`
+		VendorName   string  `json:"vendor_name"`
+		DocNumber    string  `json:"doc_number"`
+		DocDate      string  `json:"doc_date"`
+		TotalAmount  float64 `json:"total_amount"`
+		PaidAmount   float64 `json:"paid_amount"`
+		Status       string  `json:"status"`
+		DebtType     string  `json:"debt_type"`      // "Кредиторская" или "Дебиторская"
+		DebtAmount   float64 `json:"debt_amount"`
+		DeadlineDate *time.Time `json:"deadline_date"`
+	}
+
+	var debts []DebtResponse
+
+	// Запрос для получения задолженности
+	query := `
+		SELECT 
+			d.id,
+			v.company_name as vendor_name,
+			d.doc_number,
+			d.doc_date,
+			d.total_amount,
+			d.paid_amount,
+			d.status,
+			d.deadline_date,
+			CASE 
+				WHEN (d.total_amount - d.paid_amount) > 0 AND d.status != 'Исполнен' 
+				THEN 'Кредиторская'
+				WHEN d.paid_amount > 0 AND d.status != 'Исполнен'
+				THEN 'Дебиторская'
+			END as debt_type,
+			CASE 
+				WHEN (d.total_amount - d.paid_amount) > 0 AND d.status != 'Исполнен'
+				THEN (d.total_amount - d.paid_amount)
+				WHEN d.paid_amount > 0 AND d.status != 'Исполнен'
+				THEN d.paid_amount
+			END as debt_amount
+		FROM documents d
+		LEFT JOIN vendors v ON v.id = d.vendor_id
+		WHERE d.doc_type = 'Договор'
+			AND d.status != 'Исполнен'
+			AND (
+				(d.total_amount - d.paid_amount) > 0 
+				OR d.paid_amount > 0
+			)
+		ORDER BY debt_type, v.company_name, d.doc_date
+	`
+
+	if err := database.DB.Raw(query).Scan(&debts).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch debts"})
+		return
+	}
+
+	// Подсчет итоговых сумм
+	var totalCreditor float64 = 0
+	var totalDebtor float64 = 0
+	var creditorCount int = 0
+	var debtorCount int = 0
+
+	for _, debt := range debts {
+		if debt.DebtType == "Кредиторская" {
+			totalCreditor += debt.DebtAmount
+			creditorCount++
+		} else if debt.DebtType == "Дебиторская" {
+			totalDebtor += debt.DebtAmount
+			debtorCount++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"debts": debts,
+		"summary": gin.H{
+			"total_creditor":  totalCreditor,
+			"total_debtor":    totalDebtor,
+			"creditor_count":  creditorCount,
+			"debtor_count":    debtorCount,
+		},
+	})
+}

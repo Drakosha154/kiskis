@@ -51,6 +51,7 @@ type Products struct {
 	Unit        string `gorm:"not null"`
 	Category    string
 	Min_stock   int `gorm:"default:0"`
+	Max_stock   int `gorm:"default:0"`
 	Created_at  time.Time
 }
 
@@ -138,12 +139,35 @@ type Accounting struct {
 }
 
 type Storage struct {
-	ID                       uint    `gorm:"primaryKey"`
-	Product_id               int     `gorm:"not null"`
-	Quantity                 float64 `gorm:"not null;default:0"`
+	ID                       uint      `gorm:"primaryKey"`
+	Product_id               int       `gorm:"not null"`
+	Quantity                 float64   `gorm:"not null;default:0"`
 	Last_receipt_date        time.Time
 	Last_receipt_document_id int
 	Updated_at               time.Time
+}
+
+type WarehouseLocation struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	Rack         string    `gorm:"not null" json:"rack"`
+	Shelf        int       `gorm:"not null" json:"shelf"`
+	Cell         int       `gorm:"not null" json:"cell"`
+	LocationCode string    `gorm:"unique;not null" json:"location_code"`
+	Capacity     float64   `gorm:"default:100" json:"capacity"`
+	Occupied     float64   `gorm:"default:0" json:"occupied"`
+	ProductID    *int      `json:"product_id"`
+	IsAvailable  bool      `gorm:"default:true" json:"is_available"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type ProductLocationMapping struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	ProductID  int       `gorm:"not null;index" json:"product_id"`
+	LocationID int       `gorm:"not null;index" json:"location_id"`
+	Quantity   float64   `gorm:"not null;default:0" json:"quantity"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type Money struct {

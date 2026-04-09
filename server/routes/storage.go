@@ -180,6 +180,7 @@ func BulkUpdateStorage(c *gin.Context) {
 			Product_id int     `json:"product_id"`
 			Quantity   float64 `json:"quantity"`
 			Price      float64 `json:"price"`
+			LocationID *int    `json:"location_id"`
 		} `json:"items" binding:"required,min=1,dive"`
 		Document_id      int    `json:"document_id"`
 		DocumentType     string `json:"document_type"`
@@ -192,6 +193,50 @@ func BulkUpdateStorage(c *gin.Context) {
 		return
 	}
 
+	// НОВОЕ: Проверка max_stock для каждого товара
+	warnings := []map[string]interface{}{}
+	for _, item := range input.Items {
+		var product models.Products
+		if err := database.DB.First(&product, item.Product_id).Error; err != nil {
+			continue
+		}
+
+		// Получаем текущий остаток
+		var storage models.Storage
+		currentQuantity := 0.0
+		if err := database.DB.Where("product_id = ?", item.Product_id).First(&storage).Error; err == nil {
+			currentQuantity = storage.Quantity
+		}
+
+		// Проверяем превышение max_stock
+		if product.Max_stock > 0 {
+			newQuantity := currentQuantity + item.Quantity
+			if newQuantity > float64(product.Max_stock) {
+				warnings = append(warnings, map[string]interface{}{
+					"product_id":       item.Product_id,
+					"product_name":     product.Name,
+					"current_stock":    currentQuantity,
+					"receiving":        item.Quantity,
+					"new_stock":        newQuantity,
+					"max_stock":        product.Max_stock,
+					"excess":           newQuantity - float64(product.Max_stock),
+					"occupancy_percent": (newQuantity / float64(product.Max_stock)) * 100,
+				})
+			}
+		}
+	}
+
+	// Если есть предупреждения, возвращаем их (фронтенд должен запросить подтверждение)
+	forceConfirm := c.Query("force_confirm")
+	if len(warnings) > 0 && forceConfirm != "true" {
+		c.JSON(http.StatusOK, gin.H{
+			"warnings":        warnings,
+			"requires_confirm": true,
+			"message":         "Некоторые товары превысят максимальный лимит. Подтвердите приемку.",
+		})
+		return
+	}
+
 	fmt.Println(input.SelectedContract)
 
 	// Начинаем транзакцию
@@ -199,142 +244,168 @@ func BulkUpdateStorage(c *gin.Context) {
 
 	fmt.Println(input.SelectedContract)
 
-	// НОВАЯ ЛОГИКА: Получаем информацию о документе для проверки условий оплаты
-	var document models.Documents
-	if err := tx.First(&document, input.SelectedContract).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusNotFound, gin.H{"error": "Документ не найден"})
-		return
-	}
+	// Получаем информацию о документе для проверки условий оплаты
+var document models.Documents
+if err := tx.First(&document, input.SelectedContract).Error; err != nil {
+    tx.Rollback()
+    c.JSON(http.StatusNotFound, gin.H{"error": "Документ не найден"})
+    return
+}
 
-	fmt.Println(document)
+// Проверяем, можно ли принимать товар по этому договору
+// в зависимости от условий оплаты и текущего статуса оплаты
+canReceive := false
+var errorMessage string
 
-	// ИСПРАВЛЕНО: Используем сумму из документа, а не пересчитываем из товаров
-	// Это гарантирует, что оплата будет соответствовать договору
-	totalAmount := document.Total_amount
+switch document.PaymentTerms {
+case "prepaid":
+    // Для 100% предоплаты требуется полная оплата
+    if document.PaymentStatus == "fully_paid" {
+        canReceive = true
+    } else {
+        errorMessage = "Для приёмки товара по договору с предоплатой требуется полная оплата договора"
+    }
+case "partial":
+    // Для 50/50 требуется оплата минимум 50%
+    requiredAmount := document.Total_amount * 0.5
+    if document.PaidAmount >= requiredAmount {
+        canReceive = true
+    } else {
+        errorMessage = fmt.Sprintf("Для приёмки товара требуется оплатить минимум 50%% (%.2f руб.). Оплачено: %.2f руб.", 
+            requiredAmount, document.PaidAmount)
+    }
+case "postpaid":
+    // Для постоплаты приёмка доступна всегда
+    canReceive = true
+default:
+    errorMessage = "Неизвестные условия оплаты"
+}
 
-	// ИСПРАВЛЕНО: Рассчитываем сумму к оплате с учётом уже оплаченной суммы
-	// Для prepaid (100%) - amountToPay должно быть 0
-	// Для partial (50%) - amountToPay должно быть 50% от totalAmount
-	// Для postpaid (0%) - amountToPay должно быть 100% от totalAmount
-	amountToPay := totalAmount - document.PaidAmount
-
-	// Защита от отрицательных значений (если уже переплатили)
-	if amountToPay < 0 {
-		amountToPay = 0
-	}
-
-	// НОВАЯ ЛОГИКА: Проверяем достаточность средств только для оставшейся суммы
-	if amountToPay > 0 {
-		var money models.Money
-		if err := tx.First(&money).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось получить данные о бюджете"})
-			return
-		}
-
-		if money.Money < amountToPay {
-			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error":         "Недостаточно средств для оплаты остатка по договору",
-				"available":     money.Money,
-				"required":      amountToPay,
-				"shortage":      amountToPay - money.Money,
-				"already_paid":  document.PaidAmount,
-				"total_amount":  totalAmount,
-				"payment_terms": document.PaymentTerms,
-			})
-			return
-		}
-	}
+if !canReceive {
+    tx.Rollback()
+    c.JSON(http.StatusBadRequest, gin.H{
+        "error":          errorMessage,
+        "payment_terms":  document.PaymentTerms,
+        "total_amount":   document.Total_amount,
+        "paid_amount":    document.PaidAmount,
+        "payment_status": document.PaymentStatus,
+    })
+    return
+}
 
 	results := make([]map[string]interface{}, 0)
 
 	for _, item := range input.Items {
-		var storage models.Storage
-		result := tx.Where("product_id = ?", item.Product_id).First(&storage)
+	// 1. Обновить общее количество в Storage
+	var storage models.Storage
+	result := tx.Where("product_id = ?", item.Product_id).First(&storage)
 
-		oldQuantity := float64(0)
-		if result.Error == nil {
-			oldQuantity = storage.Quantity
-			storage.Quantity += item.Quantity
-			storage.Last_receipt_date = time.Now()
-			storage.Last_receipt_document_id = input.Document_id
-			storage.Updated_at = time.Now()
-
-			if err := tx.Save(&storage).Error; err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update storage"})
-				return
-			}
-		} else {
-			// Создаем новую запись
-			storage = models.Storage{
-				Product_id:               item.Product_id,
-				Quantity:                 item.Quantity,
-				Last_receipt_date:        time.Now(),
-				Last_receipt_document_id: input.Document_id,
-				Updated_at:               time.Now(),
-			}
-			if err := tx.Create(&storage).Error; err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create storage record"})
-				return
-			}
+	oldQuantity := float64(0)
+	if result.Error == nil {
+		oldQuantity = storage.Quantity
+		storage.Quantity += item.Quantity
+		storage.Last_receipt_date = time.Now()
+		storage.Last_receipt_document_id = input.Document_id
+		storage.Updated_at = time.Now()
+		tx.Save(&storage)
+	} else {
+		// Создать новую запись в Storage
+		storage = models.Storage{
+			Product_id:               item.Product_id,
+			Quantity:                 item.Quantity,
+			Last_receipt_date:        time.Now(),
+			Last_receipt_document_id: input.Document_id,
+			Updated_at:               time.Now(),
 		}
-
-		// ИСПРАВЛЕНО: Создаем запись в accounting только если есть сумма к оплате
-		// Для 100% предоплаты эта запись не создается, так как оплата уже была
-		if amountToPay > 0 {
-			// Рассчитываем пропорциональную часть оплаты для этого товар
-
-			accounting := models.Accounting{
-				Operation_date: time.Now(),
-				Operation_type: "expense",
-				Document_id:    input.Document_id,
-				Supplier_id:    input.VendorID,
-				Amount:         amountToPay,
-				Description:    input.DocumentType,
-				Created_by:     int(c.MustGet("userID").(uint)),
-				Created_at:     time.Now(),
-			}
-
-			if err := tx.Create(&accounting).Error; err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create accounting record"})
-				return
-			}
-		}
-
-		results = append(results, map[string]interface{}{
-			"product_id":   item.Product_id,
-			"old_quantity": oldQuantity,
-			"new_quantity": storage.Quantity,
-			"added":        item.Quantity,
-			"cost":         item.Quantity * item.Price,
-		})
+		tx.Create(&storage)
 	}
 
-	// ИЗМЕНЕНО: Обновляем таблицу money только если есть сумма к оплате
-	if amountToPay > 0 {
-		if err := tx.Exec("UPDATE money SET money = money - ?", amountToPay).Error; err != nil {
+	// 2. Обновить ячейку склада (если указана)
+	if item.LocationID != nil {
+		var location models.WarehouseLocation
+		if err := tx.First(&location, *item.LocationID).Error; err == nil {
+
+			// ПРОВЕРКА: Ячейка занята другим товаром?
+			if location.ProductID != nil && *location.ProductID != item.Product_id {
+				tx.Rollback()
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": fmt.Sprintf("Ячейка %s уже занята другим товаром (ID: %d)",
+						location.LocationCode, *location.ProductID),
+					"location_code": location.LocationCode,
+					"occupied_by":   *location.ProductID,
+				})
+				return
+			}
+
+			// ПРОВЕРКА: Достаточно ли места в ячейке?
+			availableSpace := location.Capacity - location.Occupied
+			if item.Quantity > availableSpace {
+				tx.Rollback()
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": fmt.Sprintf("Недостаточно места в ячейке %s. Доступно: %.2f, требуется: %.2f",
+						location.LocationCode, availableSpace, item.Quantity),
+					"location_code": location.LocationCode,
+					"available":     availableSpace,
+					"requested":     item.Quantity,
+				})
+				return
+			}
+
+			// Обновить ячейку
+			location.Occupied += item.Quantity
+			if location.ProductID == nil {
+				location.ProductID = &item.Product_id
+			}
+			tx.Save(&location)
+
+			// 3. Создать или обновить запись в ProductLocationMapping
+			var mapping models.ProductLocationMapping
+			mappingResult := tx.Where("product_id = ? AND location_id = ?",
+				item.Product_id, *item.LocationID).First(&mapping)
+
+			if mappingResult.Error == nil {
+				// Обновить существующую
+				mapping.Quantity += item.Quantity
+				mapping.UpdatedAt = time.Now()
+				tx.Save(&mapping)
+			} else {
+				// Создать новую
+				mapping = models.ProductLocationMapping{
+					ProductID:  item.Product_id,
+					LocationID: *item.LocationID,
+					Quantity:   item.Quantity,
+					CreatedAt:  time.Now(),
+					UpdatedAt:  time.Now(),
+				}
+				tx.Create(&mapping)
+			}
+
+			// Получить location_code для результата
+			results = append(results, map[string]interface{}{
+				"product_id":    item.Product_id,
+				"old_quantity":  oldQuantity,
+				"new_quantity":  storage.Quantity,
+				"added":         item.Quantity,
+				"cost":          item.Quantity * item.Price,
+				"location_code": location.LocationCode,
+			})
+		} else {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update money"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Ячейка склада не найдена"})
 			return
 		}
+	} else {
+		// Если локация не указана
+		results = append(results, map[string]interface{}{
+			"product_id":    item.Product_id,
+			"old_quantity":  oldQuantity,
+			"new_quantity":  storage.Quantity,
+			"added":         item.Quantity,
+			"cost":          item.Quantity * item.Price,
+			"location_code": "",
+		})
 	}
-
-	// НОВАЯ ЛОГИКА: Обновляем paid_amount и payment_status в документе
-	newPaymentStatus := "fully_paid"
-
-	if err := tx.Model(&document).Updates(map[string]interface{}{
-		"paid_amount":    amountToPay,
-		"payment_status": newPaymentStatus,
-	}).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update document payment status"})
-		return
-	}
+}
 
 	// Фиксируем транзакцию
 	if err := tx.Commit().Error; err != nil {
@@ -347,14 +418,10 @@ func BulkUpdateStorage(c *gin.Context) {
 	database.DB.First(&finalMoney)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":        "Bulk storage update completed",
-		"results":        results,
-		"total_amount":   totalAmount,
-		"amount_paid":    amountToPay,
-		"already_paid":   document.PaidAmount,
-		"new_paid_total": amountToPay,
-		"money_left":     finalMoney.Money,
-		"payment_status": newPaymentStatus,
-		"payment_terms":  document.PaymentTerms,
+    	"message":        "Bulk storage update completed",
+    	"results":        results,
+    	"payment_terms":  document.PaymentTerms,
+    	"payment_status": document.PaymentStatus,
+    	"warnings":       warnings,
 	})
 }

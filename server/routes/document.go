@@ -94,35 +94,8 @@ func NewDocument(c *gin.Context) {
 	}
 
 	// Рассчитываем сумму предоплаты и статус оплаты
-	var prepaymentAmount float64 = 0
 	var paymentStatus string = "unpaid"
 
-	if input.PaymentTerms == "prepaid" {
-		prepaymentAmount = input.Total_amount
-		paymentStatus = "fully_paid"
-	} else if input.PaymentTerms == "partial" {
-		prepaymentAmount = input.Total_amount * 0.5
-		paymentStatus = "partially_paid"
-	}
-
-	// Если требуется предоплата, проверяем достаточность средств
-	if prepaymentAmount > 0 {
-		var money models.Money
-		if err := database.DB.First(&money).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось получить данные о бюджете"})
-			return
-		}
-
-		if money.Money < prepaymentAmount {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error":     "Недостаточно средств в бюджете для предоплаты",
-				"available": money.Money,
-				"required":  prepaymentAmount,
-				"shortage":  prepaymentAmount - money.Money,
-			})
-			return
-		}
-	}
 
 	document := models.Documents{
 		Doc_number:    input.Doc_number,
@@ -138,7 +111,7 @@ func NewDocument(c *gin.Context) {
 		DeadlineDate:  deadlineDate,
 		DeliveryDays:  deliveryDays,
 		PaymentTerms:  input.PaymentTerms,
-		PaidAmount:    prepaymentAmount,
+		PaidAmount:    0,
 		PaymentStatus: paymentStatus,
 	}
 
@@ -153,40 +126,6 @@ func NewDocument(c *gin.Context) {
 	}
 
 	// Обработка предоплаты
-	if prepaymentAmount > 0 {
-		// Списываем средства из бюджета
-		if err := tx.Exec("UPDATE money SET money = money - ?", prepaymentAmount).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось списать средства из бюджета"})
-			return
-		}
-
-		// Создаём запись в бухгалтерии
-		var paymentDescription string
-		if input.PaymentTerms == "prepaid" {
-			paymentDescription = "Предоплата 100% по договору " + document.Doc_number
-		} else {
-			paymentDescription = "Предоплата 50% по договору " + document.Doc_number
-		}
-
-		accounting := models.Accounting{
-			Operation_date: time.Now(),
-			Operation_type: "expense",
-			Document_id:    int(document.ID),
-			Supplier_id:    input.Vendor_id,
-			Amount:         prepaymentAmount,
-			Vat_amount:     0,
-			Description:    paymentDescription,
-			Created_by:     int(userID),
-			Created_at:     time.Now(),
-		}
-
-		if err := tx.Create(&accounting).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось создать запись в бухгалтерии"})
-			return
-		}
-	}
 
 	// Фиксируем транзакцию
 	if err := tx.Commit().Error; err != nil {
@@ -202,8 +141,8 @@ func NewDocument(c *gin.Context) {
 		"deadline_date":  document.DeadlineDate,
 		"delivery_days":  document.DeliveryDays,
 		"payment_terms":  document.PaymentTerms,
-		"paid_amount":    prepaymentAmount,
-		"payment_status": document.PaymentStatus,
+		"paid_amount":    0,
+		"payment_status": "unpaid",
 	})
 }
 

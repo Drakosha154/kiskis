@@ -109,12 +109,15 @@ func UpdProductByID(c *gin.Context) {
 		Unit        string `json:"unit" binding:"required"`
 		Category    string `json:"category"`
 		Min_stock   int    `json:"min_stock" binding:"required"`
+		Max_stock   int    `json:"max_stock"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid requests body"})
 		return
 	}
+
+	fmt.Println(input)
 
 	var product models.Products
 	if err := database.DB.Where("id = ?", id).First(&product).Error; err != nil {
@@ -129,6 +132,7 @@ func UpdProductByID(c *gin.Context) {
 		Unit:        input.Unit,
 		Category:    input.Category,
 		Min_stock:   input.Min_stock,
+		Max_stock:   input.Max_stock,
 	}
 
 	if err := database.DB.Model(&product).Updates(updates).Error; err != nil {

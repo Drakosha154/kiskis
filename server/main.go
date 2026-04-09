@@ -20,7 +20,7 @@ func main() {
 		Host:     "localhost",
 		Port:     5432,
 		User:     "postgres",
-		Password: "antivzlom",
+		Password: "123",
 		DBName:   "kiskis",
 	}
 
@@ -100,10 +100,28 @@ func main() {
 		authGroup.POST("/storage/update", routes.UpdateStorage)
 		authGroup.POST("/storage/bulk-update", routes.BulkUpdateStorage)
 
+		// НОВЫЕ роуты для управления ячейками склада
+		authGroup.GET("/warehouse-locations", routes.GetWarehouseLocations)
+		authGroup.GET("/warehouse-locations/available", routes.GetAvailableLocations)
+		authGroup.GET("/warehouse-locations/suggest/:product_id", routes.SuggestLocation)
+		authGroup.GET("/warehouse-locations/stats", routes.GetWarehouseStats)
+		authGroup.POST("/warehouse-locations", routes.CreateWarehouseLocation)
+		authGroup.PUT("/warehouse-locations/:id", routes.UpdateWarehouseLocation)
+		authGroup.DELETE("/warehouse-locations/:id", routes.DeleteWarehouseLocation)
+
+		// Product-Location mapping (НОВЫЕ РОУТЫ)
+		authGroup.GET("/products/:product_id/locations", routes.GetProductLocations)
+		authGroup.GET("/products/:product_id/available-locations", routes.GetAvailableLocationsForProduct)
+		authGroup.GET("/locations/:location_id/products", routes.GetLocationProducts)
+		authGroup.POST("/products/move", routes.MoveProductBetweenLocations)
+
 		//Бухгалтерия
 		authGroup.GET("/money", routes.GetMoney)
 		authGroup.GET("/accounting/operations", routes.GetAccountingOperations)
 		authGroup.GET("/accounting/summary", routes.GetAccountingSummary)
+		authGroup.GET("/accounting/debts", routes.GetAccountingDebts)
+		authGroup.GET("/accounting/contracts-to-pay", routes.GetContractsToPay)
+		authGroup.POST("/accounting/pay-contract/:id", routes.PayContract)
 
 		// Отчёты
 		authGroup.GET("/reports/summary", routes.GetReportsSummary)
